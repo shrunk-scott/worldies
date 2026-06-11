@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>World Cup 2026 — Live Scores</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -223,7 +226,8 @@
   .team-row.winner .team-name { color: var(--gold); }
   .fav-btn {
     background: none; border: none; color: var(--muted);
-    font-size: 15px; cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0;
+    font-size: 15px; cursor: pointer; padding: 5px 4px; margin: -5px 0; line-height: 1; flex-shrink: 0;
+    display: inline-flex; align-items: center;
   }
   .fav-btn:hover { color: var(--gold); }
   .fav-btn.faved { color: var(--gold); }
@@ -454,11 +458,31 @@
     .live-dot { animation: none; }
     .match.goal-flash { animation: none; background: rgba(47,191,113,0.2); }
   }
+  @media (max-width: 560px) {
+    /* Sweep tables: keep Member / Team / Pick / Pts / Status, hide GP W D L */
+    .sweep-table th:nth-child(4), .sweep-table td:nth-child(4),
+    .sweep-table th:nth-child(5), .sweep-table td:nth-child(5),
+    .sweep-table th:nth-child(6), .sweep-table td:nth-child(6),
+    .sweep-table th:nth-child(7), .sweep-table td:nth-child(7) { display: none; }
+    .sweep-table { font-size: 13px; }
+    .sweep-league { padding: 12px; }
+    /* backdrop blur is costly on mobile GPUs */
+    .match, .calendar, .sweep-league, .group-card, .b-cell, header { backdrop-filter: none; }
+  }
   @media (max-width: 480px) {
-    h1 { font-size: 24px; }
+    h1 { font-size: 22px; }
+    header { padding: 14px 14px 12px; }
+    .header-inner { gap: 8px; }
+    .status-row { font-size: 12px; gap: 8px; width: 100%; justify-content: space-between; }
+    .refresh-btn, .bell-btn { padding: 5px 10px; font-size: 12px; }
     .team-name { font-size: 18px; }
     .team-score { font-size: 21px; }
     .match { padding: 12px; }
+    .match-meta { min-width: 78px; }
+    .date-nav button { padding: 5px 9px; font-size: 12px; }
+    .date-label { font-size: 15px; }
+    main, .search-wrap, .cal-wrap, .date-nav, .tabs, .countdown { padding-left: 14px; padding-right: 14px; }
+    .groups-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -1683,9 +1707,11 @@ document.addEventListener('visibilitychange', () => {
 
 (function initBackground() {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isSmall = Math.min(window.innerWidth, window.innerHeight) < 600;
+  const density = isSmall ? 0.45 : 1;   // fewer particles on phones
   const canvas = document.getElementById('bg3d');
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: !isSmall });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSmall ? 1.5 : 2));
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
@@ -1725,12 +1751,12 @@ document.addEventListener('visibilitychange', () => {
     return pts;
   }
 
-  const near = starLayer(350, 36, -2, 0.14, 0xeef4f9, 0.85);
-  const mid = starLayer(700, 60, -14, 0.11, 0xbcd4ea, 0.65);
-  const far = starLayer(1200, 100, -34, 0.09, 0x8fb0cf, 0.45);
+  const near = starLayer(Math.round(350 * density), 36, -2, 0.14, 0xeef4f9, 0.85);
+  const mid = starLayer(Math.round(700 * density), 60, -14, 0.11, 0xbcd4ea, 0.65);
+  const far = starLayer(Math.round(1200 * density), 100, -34, 0.09, 0x8fb0cf, 0.45);
 
   // A handful of brighter accent stars
-  const accents = starLayer(40, 34, -4, 0.3, 0xffe2b8, 0.8);
+  const accents = starLayer(Math.round(40 * density) || 20, 34, -4, 0.3, 0xffe2b8, 0.8);
 
   /* Lighting for the trophy (points are unlit, so this only affects the model) */
   scene.add(new THREE.AmbientLight(0xcfd8e3, 0.7));
@@ -1755,11 +1781,28 @@ document.addEventListener('visibilitychange', () => {
       trophy.position.sub(centre.multiplyScalar(scale));
       const holder = new THREE.Group();
       holder.add(trophy);
-      holder.position.set(3.4, -0.3, -1);
       scene.add(holder);
       trophy = holder;
+      positionTrophy();
       if (reduceMotion) renderer.render(scene, camera);
     }, undefined, (err) => { console.warn('trophy.glb failed to load', err); });
+  }
+
+  /* Keep the trophy inside the visible frame on any aspect ratio.
+     On wide screens it sits right of the content column; on phones it
+     tucks behind the content, smaller and further back. */
+  function positionTrophy() {
+    if (!trophy) return;
+    const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
+    const halfW = Math.tan((60 / 2) * Math.PI / 180) * 10 * aspect;  // visible half-width at z=0
+    if (aspect < 0.8) {
+      // Portrait phone: centre-right, pushed back and slightly smaller
+      trophy.position.set(halfW * 0.45, -0.6, -4);
+      trophy.scale.setScalar(0.8);
+    } else {
+      trophy.position.set(Math.min(3.4, halfW * 0.72), -0.3, -1);
+      trophy.scale.setScalar(1);
+    }
   }
 
   function resize() {
@@ -1767,6 +1810,7 @@ document.addEventListener('visibilitychange', () => {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    positionTrophy();
   }
   window.addEventListener('resize', resize);
   resize();
@@ -1779,7 +1823,8 @@ document.addEventListener('visibilitychange', () => {
     accents.material.opacity = 0.65 + Math.sin(t * 0.0008) * 0.18;   // gentle twinkle
     if (trophy) {
       trophy.rotation.y = t * 0.0003;
-      trophy.position.y = -0.3 + Math.sin(t * 0.0005) * 0.12;   // slow float
+      const baseY = (window.innerWidth / Math.max(window.innerHeight, 1)) < 0.8 ? -0.6 : -0.3;
+      trophy.position.y = baseY + Math.sin(t * 0.0005) * 0.12;   // slow float
     }
     renderer.render(scene, camera);
     raf = requestAnimationFrame(animate);
