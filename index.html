@@ -1727,8 +1727,17 @@ document.addEventListener('visibilitychange', () => {
   const mid = starLayer(Math.round(700 * density), 60, -14, 0.11, 0xe0bb62, 0.6);
   const far = starLayer(Math.round(1200 * density), 100, -34, 0.09, 0xb3924a, 0.4);
 
-  // A handful of brighter accent stars
-  const accents = starLayer(Math.round(40 * density) || 20, 34, -4, 0.3, 0xffe9b0, 0.85);
+  // Twinkling accent stars: several small layers, each fading on its own
+  // phase and speed so individual stars visibly sparkle
+  const twinkles = [];
+  const twinkleLayers = isSmall ? 6 : 10;
+  for (let i = 0; i < twinkleLayers; i++) {
+    twinkles.push({
+      pts: starLayer(6, 34, -3 - Math.random() * 4, 0.24 + Math.random() * 0.14, 0xffe9b0, 1),
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.0012 + Math.random() * 0.0022
+    });
+  }
 
   /* Lighting for the trophy (points are unlit, so this only affects the model) */
   scene.add(new THREE.AmbientLight(0xcfd8e3, 0.7));
@@ -1739,26 +1748,55 @@ document.addEventListener('visibilitychange', () => {
   rimLight.position.set(-6, -2, -4);
   scene.add(rimLight);
 
-  /* World Cup trophy — trophy.glb hosted alongside this HTML file */
+  /* World Cup trophy — trophy.glb hosted alongside this HTML file.
+     If the GLB can't be fetched (e.g. previewing the HTML on its own),
+     fall back to a procedural gold trophy so the scene is never empty. */
   let trophy = null;
-  if (THREE.GLTFLoader) {
-    new THREE.GLTFLoader().load('trophy.glb', (gltf) => {
-      trophy = gltf.scene;
-      // Normalise: centre the model and scale to a fixed height
-      const box = new THREE.Box3().setFromObject(trophy);
-      const size = box.getSize(new THREE.Vector3());
-      const centre = box.getCenter(new THREE.Vector3());
-      const scale = 4.6 / Math.max(size.y, 0.0001);
-      trophy.scale.setScalar(scale);
-      trophy.position.sub(centre.multiplyScalar(scale));
-      const holder = new THREE.Group();
-      holder.add(trophy);
-      scene.add(holder);
-      trophy = holder;
-      positionTrophy();
-      if (reduceMotion) renderer.render(scene, camera);
-    }, undefined, (err) => { console.warn('trophy.glb failed to load', err); });
+
+  function mountTrophy(obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    const scale = 4.6 / Math.max(size.y, 0.0001);
+    obj.scale.setScalar(scale);
+    obj.position.sub(centre.multiplyScalar(scale));
+    const holder = new THREE.Group();
+    holder.add(obj);
+    scene.add(holder);
+    trophy = holder;
+    positionTrophy();
+    if (reduceMotion) renderer.render(scene, camera);
   }
+
+  function proceduralTrophy() {
+    const gold = new THREE.MeshPhongMaterial({
+      color: 0xd9b24a, specular: 0xfff2c4, shininess: 80
+    });
+    const g = new THREE.Group();
+    // Lathe profile: base plinth up through stem to a flared cup
+    const pts = [
+      [1.05, 0], [1.05, 0.22], [0.78, 0.3], [0.62, 0.55], [0.3, 0.75],
+      [0.2, 1.1], [0.26, 1.7], [0.2, 2.3], [0.34, 2.75], [0.72, 3.1],
+      [0.92, 3.5], [0.96, 3.9], [0.88, 4.0]
+    ].map(p => new THREE.Vector2(p[0], p[1]));
+    g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 40), gold));
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.62, 32, 24), gold);
+    orb.position.y = 4.3;
+    g.add(orb);
+    return g;
+  }
+
+  function loadTrophy(urls) {
+    if (!urls.length || !THREE.GLTFLoader) {
+      mountTrophy(proceduralTrophy());
+      return;
+    }
+    new THREE.GLTFLoader().load(urls[0],
+      (gltf) => mountTrophy(gltf.scene),
+      undefined,
+      (err) => { console.warn(urls[0] + ' failed to load, trying fallback', err); loadTrophy(urls.slice(1)); });
+  }
+  loadTrophy(['trophy.glb', 'fifa_world_cup_trophy_2026_weare26.glb']);
 
   /* Keep the trophy inside the visible frame on any aspect ratio.
      On wide screens it sits right of the content column; on phones it
@@ -1792,7 +1830,9 @@ document.addEventListener('visibilitychange', () => {
     near.rotation.z = t * 0.0000045;
     mid.rotation.z = -t * 0.0000028;
     far.rotation.z = t * 0.0000015;
-    accents.material.opacity = 0.65 + Math.sin(t * 0.0008) * 0.18;   // gentle twinkle
+    twinkles.forEach(tw => {
+      tw.pts.material.opacity = 0.12 + Math.abs(Math.sin(t * tw.speed + tw.phase)) * 0.88;
+    });
     if (trophy) {
       trophy.rotation.y = t * 0.0003;
       const baseY = (window.innerWidth / Math.max(window.innerHeight, 1)) < 0.8 ? 0 : -0.4;
