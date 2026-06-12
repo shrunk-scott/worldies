@@ -1465,9 +1465,14 @@ function activeLeagues() {
 function sweepTagsFor(teamId) {
   const tags = [];
   if (!teamId) return tags;
-  activeLeagues().forEach(league => {
+  const scoped = new Set(activeLeagues());
+  SWEEP_LEAGUES.forEach(league => {
     sweeps[league].forEach(en => {
-      if (en.teamId === teamId) tags.push({ league, member: en.member, role: en.role || 'best' });
+      if (en.teamId !== teamId) return;
+      const isSelectedMember = memberFilter && sameMember(en.member, memberFilter);
+      if (scoped.has(league) || isSelectedMember) {
+        tags.push({ league, member: en.member, role: en.role || 'best' });
+      }
     });
   });
   return tags;
@@ -1477,14 +1482,32 @@ function sweepTagsFor(teamId) {
 let memberFilter = store.get('wc26.memberFilter', '');
 const memberFilterEl = document.getElementById('memberFilter');
 
+/* Same person, different names across the two draws */
+const MEMBER_ALIASES = [
+  ['scotty', 'scotty h'],
+  ['tom', 'tom k']
+];
+function sameMember(a, b) {
+  const x = a.toLowerCase(), y = b.toLowerCase();
+  if (x === y) return true;
+  return MEMBER_ALIASES.some(group => group.includes(x) && group.includes(y));
+}
+
 function memberTeamIds(name) {
+  // Spans every league the member appears in (including alias names),
+  // so someone in both Hoogies and Shrunk sees all their teams at once
   const ids = new Set();
-  activeLeagues().forEach(league => {
+  SWEEP_LEAGUES.forEach(league => {
     sweeps[league].forEach(en => {
-      if (en.member.toLowerCase() === name.toLowerCase() && en.teamId) ids.add(en.teamId);
+      if (sameMember(en.member, name) && en.teamId) ids.add(en.teamId);
     });
   });
   return ids;
+}
+
+function memberLeagues(name) {
+  return SWEEP_LEAGUES.filter(league =>
+    sweeps[league].some(en => sameMember(en.member, name)));
 }
 
 function populateMemberFilter() {
@@ -1500,7 +1523,8 @@ function populateMemberFilter() {
     (sorted.length
       ? sorted.map(n => '<option value="' + esc(n) + '"' +
           (n.toLowerCase() === memberFilter.toLowerCase() ? ' selected' : '') + '>' +
-          esc(n) + '&rsquo;s games</option>').join('')
+          esc(n) + '&rsquo;s games' +
+          (memberLeagues(n).length > 1 ? ' (both leagues)' : '') + '</option>').join('')
       : '<option value="" disabled>Open your league tab to pick</option>');
 }
 
