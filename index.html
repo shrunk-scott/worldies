@@ -785,9 +785,10 @@ function badgeHtml(ev) {
   comps.forEach(c => {
     sweepTagsFor(c.team?.id).forEach(tag => {
       const dud = tag.role === 'dud';
+      const lbl = roleLabel(tag.league, tag.role).toLowerCase();
       sweepChips += '<span class="sweep-tag ' + tag.league.toLowerCase() + (dud ? ' dud' : '') +
-        '" title="' + esc(tag.league) + (dud ? ' dud pick' : '') + '">' +
-        esc(tag.league) + ': ' + esc(tag.member) + (dud ? ' (dud)' : '') + '</span>';
+        '" title="' + esc(tag.league) + ' ' + esc(lbl) + ' pick">' +
+        esc(tag.league) + ': ' + esc(tag.member) + (dud ? ' (' + esc(lbl) + ')' : '') + '</span>';
     });
   });
   return '<div class="badge-row">' +
@@ -1331,6 +1332,53 @@ const SHRUNK_DRAW = [
   ['New Zealand', 'Nick', 'dud']
 ];
 
+/* Hoogies draw — 42 registrants, one Golden Pot + one Sh*t Pot team each,
+   per the Competition Charter draw results */
+const HOOGIES_DRAW = [
+  ['Netherlands', 'Alex & Wendy', 'best'], ['Canada', 'Alex & Wendy', 'dud'],
+  ['Brazil', 'Matt', 'best'], ['Qatar', 'Matt', 'dud'],
+  ['Austria', 'Emma', 'best'], ['Jordan', 'Emma', 'dud'],
+  ['Brazil', 'Kaye & Rob', 'best'], ['Uzbekistan', 'Kaye & Rob', 'dud'],
+  ['Uruguay', 'Isaac', 'best'], ['DR Congo', 'Isaac', 'dud'],
+  ['Argentina', 'Lina', 'best'], ['New Zealand', 'Lina', 'dud'],
+  ['Germany', 'Myles', 'best'], ['Jordan', 'Myles', 'dud'],
+  ['Spain', 'Annelies', 'best'], ['Iraq', 'Annelies', 'dud'],
+  ['France', 'Sam', 'best'], ['Algeria', 'Sam', 'dud'],
+  ['Portugal', 'Uncle Mark', 'best'], ['Ivory Coast', 'Uncle Mark', 'dud'],
+  ['USA', 'Kathie', 'best'], ['Curaçao', 'Kathie', 'dud'],
+  ['Netherlands', 'Geoff', 'best'], ['Czechia', 'Geoff', 'dud'],
+  ['Japan', 'Ged', 'best'], ['Haiti', 'Ged', 'dud'],
+  ['Croatia', 'Sigrun', 'best'], ['Tunisia', 'Sigrun', 'dud'],
+  ['Uruguay', 'Pat D', 'best'], ['Norway', 'Pat D', 'dud'],
+  ['Senegal', 'Kerrie', 'best'], ['Scotland', 'Kerrie', 'dud'],
+  ['Morocco', 'Diego', 'best'], ['Ivory Coast', 'Diego', 'dud'],
+  ['Spain', 'Kelly', 'best'], ['Norway', 'Kelly', 'dud'],
+  ['Ecuador', 'Dave', 'best'], ['Ghana', 'Dave', 'dud'],
+  ['England', 'Nanna', 'best'], ['South Africa', 'Nanna', 'dud'],
+  ['Belgium', 'Patrick M', 'best'], ['Paraguay', 'Patrick M', 'dud'],
+  ['Switzerland', 'Cathy', 'best'], ['Paraguay', 'Cathy', 'dud'],
+  ['Argentina', 'Fin', 'best'], ['Scotland', 'Fin', 'dud'],
+  ['Portugal', 'Scotty H', 'best'], ['Czechia', 'Scotty H', 'dud'],
+  ['South Korea', 'Aunty Jo', 'best'], ['Canada', 'Aunty Jo', 'dud'],
+  ['Japan', 'Tom R', 'best'], ['Egypt', 'Tom R', 'dud'],
+  ['Mexico', 'Jarom', 'best'], ['Sweden', 'Jarom', 'dud'],
+  ['Colombia', 'Jack', 'best'], ['Qatar', 'Jack', 'dud'],
+  ['Senegal', 'Scotty I', 'best'], ['Sweden', 'Scotty I', 'dud'],
+  ['Morocco', 'Tom K', 'best'], ['Panama', 'Tom K', 'dud'],
+  ['Mexico', 'Tom M', 'best'], ['Egypt', 'Tom M', 'dud'],
+  ['Switzerland', 'Billy', 'best'], ['Algeria', 'Billy', 'dud'],
+  ['USA', 'Lisa', 'best'], ['Saudi Arabia', 'Lisa', 'dud'],
+  ['Türkiye', 'Powlay', 'best'], ['South Africa', 'Powlay', 'dud'],
+  ['Australia', 'Mark K', 'best'], ['Panama', 'Mark K', 'dud'],
+  ['Iran', 'Isla', 'best'], ['Bosnia and Herzegovina', 'Isla', 'dud'],
+  ['Croatia', 'Murray', 'best'], ['DR Congo', 'Murray', 'dud'],
+  ['Colombia', 'Lolo', 'best'], ['Cape Verde', 'Lolo', 'dud'],
+  ['Germany', 'Win', 'best'], ['Tunisia', 'Win', 'dud'],
+  ['France', 'John Wilkinson', 'best'], ['Iraq', 'John Wilkinson', 'dud'],
+  ['Belgium', 'Dr Jack', 'best'], ['Saudi Arabia', 'Dr Jack', 'dud'],
+  ['England', 'Kaedin', 'best'], ['Uzbekistan', 'Kaedin', 'dud']
+];
+
 /* Names in the draw vs ESPN team names — normalised-form aliases */
 const TEAM_ALIASES = {
   'turkiye': ['turkey'],
@@ -1369,16 +1417,13 @@ function resolveSweepTeamIds() {
   if (changed) saveSweeps();
 }
 
-const stored = store.get('wc26.sweeps', { Hoogies: [] });
+/* Both draws are locked in — always built from the hardcoded lists */
 let sweeps = {
-  Hoogies: Array.isArray(stored.Hoogies) ? stored.Hoogies : [],
-  /* Shrunk draw is locked in — always built from the hardcoded list */
+  Hoogies: HOOGIES_DRAW.map(([teamName, member, role]) => ({ member, teamId: null, teamName, role })),
   Shrunk: SHRUNK_DRAW.map(([teamName, member, role]) => ({ member, teamId: null, teamName, role }))
 };
-const LOCKED_LEAGUES = new Set(['Shrunk']);
-function saveSweeps() {
-  store.set('wc26.sweeps', { Hoogies: sweeps.Hoogies });
-}
+const LOCKED_LEAGUES = new Set(['Hoogies', 'Shrunk']);
+function saveSweeps() { /* nothing user-editable to persist */ }
 let teamIndex = {};            // teamId -> { name, logo, group, gp, w, d, l, pts, rank }
 let eliminated = {};           // teamId -> 'R32' | 'R16' | 'QF' | 'SF' | 'F'
 let champion = null;
@@ -1491,6 +1536,14 @@ function sweepMemberStrings() {
   return out;
 }
 
+const ROLE_LABELS = {
+  Hoogies: { best: 'Golden', dud: 'Sh*t' },
+  Shrunk: { best: 'Best', dud: 'Dud' }
+};
+function roleLabel(league, role) {
+  return (ROLE_LABELS[league] || ROLE_LABELS.Shrunk)[role === 'dud' ? 'dud' : 'best'];
+}
+
 function stageShort(slug) {
   return { 'round-of-32': 'R32', 'round-of-16': 'R16', 'quarterfinals': 'QF',
     'semifinals': 'SF', 'third-place-match': '3rd', 'final': 'Final' }[slug] || slug;
@@ -1536,7 +1589,8 @@ function bTeamHtml(c) {
   const cls = c.winner ? ' b-winner' : (c.winner === false && c.score != null && c._decided ? ' b-loser' : '');
   const chips = tags.map(tag =>
     '<span class="b-chip ' + tag.league.toLowerCase() + (tag.role === 'dud' ? ' dud' : '') +
-    '" title="' + esc(tag.league) + ': ' + esc(tag.member) + (tag.role === 'dud' ? ' (dud)' : '') + '">' +
+    '" title="' + esc(tag.league) + ': ' + esc(tag.member) +
+    (tag.role === 'dud' ? ' (' + esc(roleLabel(tag.league, 'dud').toLowerCase()) + ')' : '') + '">' +
     esc(tag.member) + '</span>').join('');
   return '<div class="b-team' + cls + '">' +
     (t.logo ? '<img class="b-flag" src="' + esc(t.logo) + '" alt="' + esc(t.displayName || '') + ' flag" loading="lazy">'
@@ -1636,7 +1690,7 @@ function sweepRow(league, en, idx) {
       '<span>' + esc(t.name) + '</span>' +
       (t.group ? '<span style="color:var(--muted);font-size:12px">Gr ' + esc(t.group) + '</span>' : '') +
     '</span></td>' +
-    '<td><span class="role-' + role + '">' + (role === 'dud' ? 'Dud' : 'Best') + '</span></td>' +
+    '<td><span class="role-' + role + '">' + esc(roleLabel(league, role)) + '</span></td>' +
     '<td>' + esc(t.gp) + '</td><td>' + esc(t.w) + '</td><td>' + esc(t.d) + '</td><td>' + esc(t.l) + '</td>' +
     '<td style="font-weight:600">' + esc(t.pts) + '</td>' +
     '<td>' + status + '</td>' +
@@ -1668,7 +1722,11 @@ function renderSweeps(league) {
       '<div class="sweep-title ' + league.toLowerCase() + '">' + esc(league) +
         ' <span style="color:var(--muted);font-size:13px;letter-spacing:0.02em;text-transform:none;font-family:Barlow,sans-serif;font-weight:400">' +
         entries.length + (entries.length === 1 ? ' team' : ' teams') +
-        (locked ? ' &middot; draw locked in' : '') + '</span></div>' +
+        (locked ? ' &middot; draw locked in' : '') + '</span>' +
+        (league === 'Hoogies'
+          ? '<a href="charter.pdf" target="_blank" rel="noopener" style="margin-left:auto;color:var(--gold);font-family:Barlow,sans-serif;font-size:13px;letter-spacing:0.02em;text-transform:none;font-weight:500;text-decoration:none;border:1px solid rgba(232,184,75,0.45);border-radius:6px;padding:3px 10px">Competition Charter</a>'
+          : '') +
+      '</div>' +
       (entries.length
         ? '<table class="sweep-table">' +
             '<thead><tr><th>Member</th><th>Team</th><th>Pick</th><th>GP</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>Status</th>' +
