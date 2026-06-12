@@ -1448,6 +1448,8 @@ const LOCKED_LEAGUES = new Set(['Hoogies', 'Shrunk']);
 function saveSweeps() { /* nothing user-editable to persist */ }
 let teamIndex = {};            // teamId -> { name, logo, group, gp, w, d, l, pts, rank }
 let eliminated = {};           // teamId -> 'R32' | 'R16' | 'QF' | 'SF' | 'F'
+let koWins = {};               // teamId -> knockout wins (incl. 3rd place match)
+let koLosses = {};             // teamId -> knockout losses
 let champion = null;
 let elimsLoaded = false;
 const sweepsMain = document.getElementById('sweepsMain');
@@ -1636,10 +1638,13 @@ async function loadKnockouts() {
       const comp = ev.competitions?.[0];
       if (!comp || comp.status?.type?.state !== 'post') return;
       const slug = ev.season?.slug || '';
-      if (slug === 'group-stage' || slug === 'third-place-match') return;
+      if (slug === 'group-stage') return;
       const comps = comp.competitors || [];
       const loser = comps.find(c => !c.winner);
       const winner = comps.find(c => c.winner);
+      if (winner?.team?.id) koWins[winner.team.id] = (koWins[winner.team.id] || 0) + 1;
+      if (loser?.team?.id) koLosses[loser.team.id] = (koLosses[loser.team.id] || 0) + 1;
+      if (slug === 'third-place-match') return;   // counts for points, not elimination
       if (loser?.team?.id) eliminated[loser.team.id] = stageShort(slug);
       if (slug === 'final' && winner?.team?.id) champion = winner.team.id;
     });
@@ -1745,6 +1750,15 @@ function renderBracket() {
     '<div class="bracket-note">Slots fill in as the knockout draw is decided — Round of 32 kicks off 28 June.</div>';
 }
 
+function sweepPoints(en) {
+  const t = teamIndex[en.teamId];
+  if (!t) return 0;
+  const w = (Number(t.w) || 0) + (koWins[en.teamId] || 0);
+  const d = Number(t.d) || 0;
+  const l = (Number(t.l) || 0) + (koLosses[en.teamId] || 0);
+  return w * 2 + d - l;
+}
+
 function sweepRow(league, en, idx) {
   const t = teamIndex[en.teamId] || { name: en.teamName || en.teamId, logo: '', group: '', gp: '', w: '', d: '', l: '', pts: '' };
   const role = en.role || 'best';
@@ -1756,6 +1770,9 @@ function sweepRow(league, en, idx) {
   } else {
     status = '<span class="sweep-status-in">Alive</span>';
   }
+  const ptsCell = league === 'Shrunk'
+    ? '<td style="font-weight:600;color:var(--pitch)">' + sweepPoints(en) + '</td>'
+    : '';
   return '<tr>' +
     '<td class="sweep-member">' + esc(en.member) + '</td>' +
     '<td><span class="sweep-team">' +
@@ -1765,7 +1782,7 @@ function sweepRow(league, en, idx) {
     '</span></td>' +
     '<td><span class="role-' + role + '">' + esc(roleLabel(league, role)) + '</span></td>' +
     '<td>' + esc(t.gp) + '</td><td>' + esc(t.w) + '</td><td>' + esc(t.d) + '</td><td>' + esc(t.l) + '</td>' +
-    '<td style="font-weight:600">' + esc(t.pts) + '</td>' +
+    ptsCell +
     '<td>' + status + '</td>' +
     (LOCKED_LEAGUES.has(league) ? '' :
       '<td><button class="sweep-remove" data-league="' + esc(league) + '" data-idx="' + idx +
@@ -1789,7 +1806,12 @@ function renderSweeps(league) {
   if (!currentSweepLeague) currentSweepLeague = chipLeague || 'Hoogies';
   sweepsMain.innerHTML = [currentSweepLeague].map(league => {
     const locked = LOCKED_LEAGUES.has(league);
-    const entries = sweeps[league];
+    let entries = sweeps[league];
+    if (league === 'Shrunk') {
+      entries = entries.slice().sort((a, b) =>
+        sweepPoints(b) - sweepPoints(a) || a.member.localeCompare(b.member) ||
+        (a.teamName || '').localeCompare(b.teamName || ''));
+    }
     const rows = entries.map((en, i) => sweepRow(league, en, i)).join('');
     return '<div class="sweep-league">' +
       '<div class="sweep-title ' + league.toLowerCase() + '">' + esc(league) +
@@ -1802,9 +1824,14 @@ function renderSweeps(league) {
       '</div>' +
       (entries.length
         ? '<table class="sweep-table">' +
-            '<thead><tr><th>Member</th><th>Team</th><th>Pick</th><th>GP</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>Status</th>' +
+            '<thead><tr><th>Member</th><th>Team</th><th>Pick</th><th>GP</th><th>W</th><th>D</th><th>L</th>' +
+            (league === 'Shrunk' ? '<th title="Win +2, draw +1, loss \u22121">Pts</th>' : '') +
+            '<th>Status</th>' +
             (locked ? '' : '<th></th>') + '</tr></thead>' +
-            '<tbody>' + rows + '</tbody></table>'
+            '<tbody>' + rows + '</tbody></table>' +
+          (league === 'Shrunk'
+            ? '<div class="sweep-empty" style="padding-top:10px">Scoring: win +2 points, draw +1 point, loss \u22121 point. Ranked highest to lowest.</div>'
+            : '')
         : '<div class="sweep-empty">No members yet — add the sweep draw below.</div>') +
       (locked ? '' :
         '<div class="sweep-add">' +
