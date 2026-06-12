@@ -213,25 +213,23 @@
     0%, 100% { background: var(--panel); }
     50% { background: rgba(47, 191, 113, 0.32); border-color: var(--pitch); }
   }
-  .match-top { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; }
-  .badge-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
-  .stage-badge {
+  .match-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 42%); gap: 6px 14px; align-items: center; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; align-items: center; }
+  .stage-badge, .sweep-tag, .goal-badge {
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    border-radius: 4px; padding: 1px 7px; line-height: 17px;
+    white-space: nowrap; flex-shrink: 0;
   }
-  .goal-badge {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 12px; font-weight: 700; letter-spacing: 0.14em;
-    color: #07130c; background: var(--pitch); border-radius: 4px; padding: 1px 8px;
-  }
+  .stage-badge { color: var(--muted); border: 1px solid var(--line); }
+  .goal-badge { font-weight: 700; color: #07130c; background: var(--pitch); }
   .teams { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .team-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .team-row img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
   .team-name {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 21px; font-weight: 600; letter-spacing: 0.02em;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1.15; min-width: 0;
   }
   .team-row.winner .team-name { color: var(--gold); }
   .fav-btn {
@@ -258,7 +256,7 @@
   .match-state.live { color: var(--live); }
   .match-state.ft { color: var(--muted); }
   .match-state.kick { color: var(--pitch); }
-  .match-venue { font-size: 12px; color: var(--muted); }
+  .match-venue { font-size: 12px; color: var(--muted); text-align: right; overflow-wrap: anywhere; }
   .time-label {
     font-size: 10px; color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.1em; margin-top: -3px;
@@ -366,11 +364,6 @@
   }
   .sweep-add button:hover { border-color: var(--pitch); }
   .sweep-empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
-  .sweep-tag {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-    border-radius: 4px; padding: 1px 7px;
-  }
   .sweep-tag.hoogies { color: var(--gold); border: 1px solid rgba(232,184,75,0.45); }
   .sweep-tag.shrunk { color: var(--pitch); border: 1px solid rgba(47,191,113,0.45); }
   .sweep-tag.dud, .b-chip.dud { border-style: dashed; opacity: 0.85; }
@@ -787,8 +780,8 @@ function badgeHtml(ev) {
       const dud = tag.role === 'dud';
       const lbl = roleLabel(tag.league, tag.role).toLowerCase();
       sweepChips += '<span class="sweep-tag ' + tag.league.toLowerCase() + (dud ? ' dud' : '') +
-        '" title="' + esc(tag.league) + ' ' + esc(lbl) + ' pick">' +
-        esc(tag.league) + ': ' + esc(tag.member) + (dud ? ' (' + esc(lbl) + ')' : '') + '</span>';
+        '" title="' + esc(tag.league) + ' ' + esc(lbl) + ' pick: ' + esc(tag.member) + '">' +
+        esc(tag.member) + (dud ? ' (' + esc(lbl) + ')' : '') + '</span>';
     });
   });
   return '<div class="badge-row">' +
