@@ -169,12 +169,37 @@
     max-width: 760px; margin: 16px auto 0; padding: 0 20px;
     display: flex; gap: 8px;
   }
-  .member-select {
+  .member-picker { position: relative; flex: 0 0 auto; }
+  .member-btn {
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    color: var(--text); font-family: inherit; font-size: 15px; padding: 10px 10px;
-    flex: 0 0 auto; max-width: 165px;
+    color: var(--text); font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 600; letter-spacing: 0.05em;
+    padding: 10px 12px; cursor: pointer; height: 100%;
+    display: flex; align-items: center; gap: 7px; max-width: 175px; white-space: nowrap;
   }
-  .member-select:focus { outline: none; border-color: var(--pitch); }
+  .member-btn svg { color: var(--muted); flex-shrink: 0; transition: transform 0.15s; }
+  .member-btn[aria-expanded="true"] { border-color: var(--pitch); }
+  .member-btn[aria-expanded="true"] svg { transform: rotate(180deg); color: var(--pitch); }
+  .member-btn:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
+  .member-btn span { overflow: hidden; text-overflow: ellipsis; }
+  .member-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+    min-width: 220px; max-height: 290px; overflow-y: auto;
+    background: #101b26; border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55); padding: 5px;
+  }
+  .member-item {
+    display: block; width: 100%; text-align: left;
+    background: none; border: none; border-radius: 6px;
+    color: var(--text); font-family: 'Barlow', sans-serif; font-size: 14px;
+    padding: 8px 11px; cursor: pointer;
+  }
+  .member-item:hover { background: rgba(47,191,113,0.12); }
+  .member-item.selected {
+    color: var(--pitch); font-weight: 600;
+    background: rgba(47,191,113,0.08);
+  }
+  .member-item .both-note { color: var(--muted); font-size: 12px; }
   .search-box {
     flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     color: var(--text); font-family: inherit; font-size: 15px; padding: 10px 14px;
@@ -544,9 +569,13 @@
   </div>
 
   <div class="search-wrap">
-    <select class="member-select" id="memberFilter" aria-label="Show one member's games">
-      <option value="">All games</option>
-    </select>
+    <div class="member-picker">
+      <button class="member-btn" id="memberBtn" aria-haspopup="listbox" aria-expanded="false">
+        <span id="memberBtnLabel">All games</span>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="member-menu" id="memberMenu" role="listbox" hidden></div>
+    </div>
     <input type="search" class="search-box" id="teamSearch"
            placeholder="Search by team, e.g. Australia, Mexico, Japan…"
            aria-label="Search matches by team">
@@ -1307,21 +1336,21 @@ const SWEEP_LEAGUES = ['Hoogies', 'Shrunk'];
 /* Shrunk sweep draw — top 24 by FIFA rank are Best picks, bottom 24 are Duds */
 const SHRUNK_DRAW = [
   ['France', 'Lina', 'best'], ['Spain', 'Steve', 'best'], ['Argentina', 'Lina', 'best'],
-  ['England', 'Nick', 'best'], ['Portugal', 'Tom', 'best'], ['Brazil', 'Tom', 'best'],
-  ['Netherlands', 'Nick', 'best'], ['Morocco', 'Lina', 'best'], ['Belgium', 'Scotty', 'best'],
-  ['Germany', 'Scotty', 'best'], ['Croatia', 'Steve', 'best'], ['Colombia', 'Tom', 'best'],
+  ['England', 'Nick', 'best'], ['Portugal', 'Tom K', 'best'], ['Brazil', 'Tom K', 'best'],
+  ['Netherlands', 'Nick', 'best'], ['Morocco', 'Lina', 'best'], ['Belgium', 'Scotty H', 'best'],
+  ['Germany', 'Scotty H', 'best'], ['Croatia', 'Steve', 'best'], ['Colombia', 'Tom K', 'best'],
   ['Senegal', 'Nick', 'best'], ['Mexico', 'Steve', 'best'], ['USA', 'Nick', 'best'],
-  ['Uruguay', 'Scotty', 'best'], ['Japan', 'Steve', 'best'], ['Switzerland', 'Scotty', 'best'],
-  ['Iran', 'Scotty', 'best'], ['Türkiye', 'Nick', 'best'], ['Ecuador', 'Lina', 'best'],
-  ['Austria', 'Tom', 'best'], ['South Korea', 'Lina', 'best'], ['Australia', 'Tom', 'best'],
-  ['Algeria', 'Tom', 'dud'], ['Egypt', 'Nick', 'dud'], ['Canada', 'Steve', 'dud'],
-  ['Norway', 'Tom', 'dud'], ['Panama', 'Steve', 'dud'], ['Ivory Coast', 'Nick', 'dud'],
-  ['Sweden', 'Lina', 'dud'], ['Paraguay', 'Tom', 'dud'], ['Czechia', 'Lina', 'dud'],
-  ['Scotland', 'Scotty', 'dud'], ['Tunisia', 'Nick', 'dud'], ['DR Congo', 'Lina', 'dud'],
-  ['Uzbekistan', 'Scotty', 'dud'], ['Qatar', 'Scotty', 'dud'], ['Iraq', 'Steve', 'dud'],
-  ['South Africa', 'Steve', 'dud'], ['Saudi Arabia', 'Scotty', 'dud'], ['Jordan', 'Nick', 'dud'],
-  ['Bosnia and Herzegovina', 'Scotty', 'dud'], ['Cape Verde', 'Lina', 'dud'],
-  ['Ghana', 'Tom', 'dud'], ['Curaçao', 'Steve', 'dud'], ['Haiti', 'Lina', 'dud'],
+  ['Uruguay', 'Scotty H', 'best'], ['Japan', 'Steve', 'best'], ['Switzerland', 'Scotty H', 'best'],
+  ['Iran', 'Scotty H', 'best'], ['Türkiye', 'Nick', 'best'], ['Ecuador', 'Lina', 'best'],
+  ['Austria', 'Tom K', 'best'], ['South Korea', 'Lina', 'best'], ['Australia', 'Tom K', 'best'],
+  ['Algeria', 'Tom K', 'dud'], ['Egypt', 'Nick', 'dud'], ['Canada', 'Steve', 'dud'],
+  ['Norway', 'Tom K', 'dud'], ['Panama', 'Steve', 'dud'], ['Ivory Coast', 'Nick', 'dud'],
+  ['Sweden', 'Lina', 'dud'], ['Paraguay', 'Tom K', 'dud'], ['Czechia', 'Lina', 'dud'],
+  ['Scotland', 'Scotty H', 'dud'], ['Tunisia', 'Nick', 'dud'], ['DR Congo', 'Lina', 'dud'],
+  ['Uzbekistan', 'Scotty H', 'dud'], ['Qatar', 'Scotty H', 'dud'], ['Iraq', 'Steve', 'dud'],
+  ['South Africa', 'Steve', 'dud'], ['Saudi Arabia', 'Scotty H', 'dud'], ['Jordan', 'Nick', 'dud'],
+  ['Bosnia and Herzegovina', 'Scotty H', 'dud'], ['Cape Verde', 'Lina', 'dud'],
+  ['Ghana', 'Tom K', 'dud'], ['Curaçao', 'Steve', 'dud'], ['Haiti', 'Lina', 'dud'],
   ['New Zealand', 'Nick', 'dud']
 ];
 
@@ -1480,13 +1509,13 @@ function sweepTagsFor(teamId) {
 
 /* Member filter: show only games involving one member's teams */
 let memberFilter = store.get('wc26.memberFilter', '');
-const memberFilterEl = document.getElementById('memberFilter');
+const memberBtn = document.getElementById('memberBtn');
+const memberBtnLabel = document.getElementById('memberBtnLabel');
+const memberMenu = document.getElementById('memberMenu');
 
-/* Same person, different names across the two draws */
-const MEMBER_ALIASES = [
-  ['scotty', 'scotty h'],
-  ['tom', 'tom k']
-];
+/* Same person, different names across the two draws (none needed currently —
+   names are kept identical in both draws instead) */
+const MEMBER_ALIASES = [];
 function sameMember(a, b) {
   const x = a.toLowerCase(), y = b.toLowerCase();
   if (x === y) return true;
@@ -1511,28 +1540,55 @@ function memberLeagues(name) {
 }
 
 function populateMemberFilter() {
+  // Every player from every league is selectable
   const names = new Set();
-  activeLeagues().forEach(league =>
+  SWEEP_LEAGUES.forEach(league =>
     sweeps[league].forEach(en => names.add(en.member)));
   const sorted = [...names].sort((a, b) => a.localeCompare(b));
   if (memberFilter && !sorted.some(n => n.toLowerCase() === memberFilter.toLowerCase())) {
     memberFilter = '';
     store.set('wc26.memberFilter', '');
   }
-  memberFilterEl.innerHTML = '<option value="">All games</option>' +
-    (sorted.length
-      ? sorted.map(n => '<option value="' + esc(n) + '"' +
-          (n.toLowerCase() === memberFilter.toLowerCase() ? ' selected' : '') + '>' +
-          esc(n) + '&rsquo;s games' +
-          (memberLeagues(n).length > 1 ? ' (both leagues)' : '') + '</option>').join('')
-      : '<option value="" disabled>Open your league tab to pick</option>');
+  memberMenu.innerHTML =
+    '<button class="member-item' + (!memberFilter ? ' selected' : '') +
+      '" data-member="" role="option">All games</button>' +
+    sorted.map(n => '<button class="member-item' +
+      (n.toLowerCase() === memberFilter.toLowerCase() ? ' selected' : '') +
+      '" data-member="' + esc(n) + '" role="option">' + esc(n) + '&rsquo;s games' +
+      (memberLeagues(n).length > 1 ? ' <span class="both-note">(both leagues)</span>' : '') +
+      '</button>').join('');
+  memberBtnLabel.textContent = memberFilter ? memberFilter + '\u2019s games' : 'All games';
 }
 
-memberFilterEl.addEventListener('change', () => {
-  memberFilter = memberFilterEl.value;
+function closeMemberMenu() {
+  memberMenu.hidden = true;
+  memberBtn.setAttribute('aria-expanded', 'false');
+}
+memberBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = memberMenu.hidden;
+  memberMenu.hidden = !open;
+  memberBtn.setAttribute('aria-expanded', String(open));
+  if (open) {
+    const sel = memberMenu.querySelector('.member-item.selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  }
+});
+memberMenu.addEventListener('click', (e) => {
+  const item = e.target.closest('.member-item');
+  if (!item) return;
+  memberFilter = item.dataset.member;
   store.set('wc26.memberFilter', memberFilter);
+  populateMemberFilter();
+  closeMemberMenu();
   if (lastData) render(lastData);
   renderCalendar();
+});
+document.addEventListener('click', (e) => {
+  if (!memberMenu.hidden && !e.target.closest('.member-picker')) closeMemberMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMemberMenu();
 });
 
 function matchesMemberFilter(comps) {
