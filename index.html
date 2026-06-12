@@ -165,9 +165,18 @@
   .cal-loading { font-size: 12px; color: var(--muted); text-align: center; padding: 6px 0 2px; }
 
   /* Search */
-  .search-wrap { max-width: 760px; margin: 16px auto 0; padding: 0 20px; }
+  .search-wrap {
+    max-width: 760px; margin: 16px auto 0; padding: 0 20px;
+    display: flex; gap: 8px;
+  }
+  .member-select {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); font-family: inherit; font-size: 15px; padding: 10px 10px;
+    flex: 0 0 auto; max-width: 165px;
+  }
+  .member-select:focus { outline: none; border-color: var(--pitch); }
   .search-box {
-    width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     color: var(--text); font-family: inherit; font-size: 15px; padding: 10px 14px;
   }
   .search-box::placeholder { color: var(--muted); }
@@ -542,6 +551,9 @@
   </div>
 
   <div class="search-wrap">
+    <select class="member-select" id="memberFilter" aria-label="Show one member's games">
+      <option value="">All games</option>
+    </select>
     <input type="search" class="search-box" id="teamSearch"
            placeholder="Search by team, e.g. Australia, Mexico, Japan…"
            aria-label="Search matches by team">
@@ -831,8 +843,9 @@ function matchCard(ev) {
 }
 
 function matchesSearch(ev, q) {
-  if (!q) return true;
   const comps = ev.competitions?.[0]?.competitors || [];
+  if (!matchesMemberFilter(comps)) return false;
+  if (!q) return true;
   const teamHit = comps.some(c => {
     const t = c.team || {};
     return [t.displayName, t.shortDisplayName, t.name, t.abbreviation, t.location]
@@ -860,8 +873,9 @@ function render(data) {
     return false;
   }
   if (!events.length) {
-    content.innerHTML = '<div class="empty">No matches for &ldquo;' + esc(q) +
-      '&rdquo; on this day. Try another day with a dot on the calendar.</div>';
+    const whoWhat = memberFilter && !q ? esc(memberFilter) + '&rsquo;s teams' : '&ldquo;' + esc(q) + '&rdquo;';
+    content.innerHTML = '<div class="empty">No matches for ' + whoWhat +
+      ' on this day. Try another day with a dot on the calendar.</div>';
     return all.some(e => e.competitions?.[0]?.status?.type?.state === 'in');
   }
 
@@ -1118,8 +1132,10 @@ function renderCalendar() {
 
   const gameDays = new Set();
   const favDays = new Set();
+  const memberIds = memberFilter ? memberTeamIds(memberFilter) : null;
   Object.keys(byDay).forEach(day => {
     const list = byDay[day].filter(e => {
+      if (memberIds && !e.ids.some(id => memberIds.has(id))) return false;
       if (!q) return true;
       // teams string holds both teams separated by '|'
       return e.teams.includes(q);
@@ -1282,6 +1298,7 @@ async function loadStandings() {
     renderGroups();
     buildTeamIndex();
     resolveSweepTeamIds();
+    populateMemberFilter();
     renderSweeps();
     if (lastData) render(lastData);   // refresh badges with group letters
   } catch (err) {
@@ -1396,7 +1413,9 @@ function setChipLeague(league) {
   if (chipLeague === league) return;
   chipLeague = league;
   store.set('wc26.chipLeague', league);
+  populateMemberFilter();
   if (lastData) render(lastData);
+  renderCalendar();
   renderBracket();
 }
 function activeLeagues() {
@@ -1414,6 +1433,50 @@ function sweepTagsFor(teamId) {
     });
   });
   return tags;
+}
+
+/* Member filter: show only games involving one member's teams */
+let memberFilter = store.get('wc26.memberFilter', '');
+const memberFilterEl = document.getElementById('memberFilter');
+
+function memberTeamIds(name) {
+  const ids = new Set();
+  activeLeagues().forEach(league => {
+    sweeps[league].forEach(en => {
+      if (en.member.toLowerCase() === name.toLowerCase() && en.teamId) ids.add(en.teamId);
+    });
+  });
+  return ids;
+}
+
+function populateMemberFilter() {
+  const names = new Set();
+  activeLeagues().forEach(league =>
+    sweeps[league].forEach(en => names.add(en.member)));
+  const sorted = [...names].sort((a, b) => a.localeCompare(b));
+  if (memberFilter && !sorted.some(n => n.toLowerCase() === memberFilter.toLowerCase())) {
+    memberFilter = '';
+    store.set('wc26.memberFilter', '');
+  }
+  memberFilterEl.innerHTML = '<option value="">All games</option>' +
+    (sorted.length
+      ? sorted.map(n => '<option value="' + esc(n) + '"' +
+          (n.toLowerCase() === memberFilter.toLowerCase() ? ' selected' : '') + '>' +
+          esc(n) + '&rsquo;s games</option>').join('')
+      : '<option value="" disabled>Open your league tab to pick</option>');
+}
+
+memberFilterEl.addEventListener('change', () => {
+  memberFilter = memberFilterEl.value;
+  store.set('wc26.memberFilter', memberFilter);
+  if (lastData) render(lastData);
+  renderCalendar();
+});
+
+function matchesMemberFilter(comps) {
+  if (!memberFilter) return true;
+  const ids = memberTeamIds(memberFilter);
+  return comps.some(c => ids.has(c.team?.id));
 }
 
 function sweepMemberStrings() {
@@ -1857,6 +1920,7 @@ document.addEventListener('visibilitychange', () => {
 /* ---------- Boot ---------- */
 
 updateDateLabel();
+populateMemberFilter();
 loadCalendarMonth();
 loadStandings();
 load();
