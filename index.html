@@ -331,7 +331,7 @@
     border-top: 1px solid rgba(31,49,66,0.6);
   }
   .group-table td:first-child { text-align: left; }
-  .group-team { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .group-team { display: flex; align-items: center; gap: 5px; min-width: 0; flex-wrap: wrap; row-gap: 2px; }
   .group-team img { width: 17px; height: 17px; object-fit: contain; flex-shrink: 0; }
   .group-team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
   .group-table .pts { font-weight: 600; color: var(--text); }
@@ -1283,10 +1283,15 @@ function renderGroups() {
     const rows = entries.map((en, i) => {
       const t = en.team || {};
       const faved = favourites[t.id] ? ' style="color:var(--gold)"' : '';
+      const ownerChips = sweepTagsFor(t.id).map(tag =>
+        '<span class="b-chip ' + tag.league.toLowerCase() + (tag.role === 'dud' ? ' dud' : '') +
+        '" title="' + esc(tag.league) + ' ' + esc(roleLabel(tag.league, tag.role).toLowerCase()) +
+        ' pick: ' + esc(tag.member) + '">' + esc(tag.member) + '</span>').join('');
       return '<tr class="' + (i < 2 ? 'q' : '') + '">' +
         '<td><span class="group-team">' +
           (t.logos?.[0]?.href ? '<img src="' + esc(t.logos[0].href) + '" alt="" loading="lazy">' : '') +
           '<span' + faved + '>' + esc(t.displayName || t.name || '?') + '</span>' +
+          ownerChips +
         '</span></td>' +
         '<td>' + esc(statVal(en, ['gamesPlayed', 'GP'])) + '</td>' +
         '<td>' + esc(statVal(en, ['wins', 'W'])) + '</td>' +
@@ -1486,6 +1491,7 @@ function setChipLeague(league) {
   if (lastData) render(lastData);
   renderCalendar();
   renderBracket();
+  renderGroups();
 }
 function activeLeagues() {
   // No tags anywhere until the viewer picks their league tab —
@@ -1585,6 +1591,7 @@ memberMenu.addEventListener('click', (e) => {
   closeMemberMenu();
   if (lastData) render(lastData);
   renderCalendar();
+  renderGroups();
 });
 document.addEventListener('click', (e) => {
   if (!memberMenu.hidden && !e.target.closest('.member-picker')) closeMemberMenu();
