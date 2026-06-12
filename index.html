@@ -1285,15 +1285,10 @@ function renderGroups() {
     const rows = entries.map((en, i) => {
       const t = en.team || {};
       const faved = favourites[t.id] ? ' style="color:var(--gold)"' : '';
-      const ownerChips = sweepTagsFor(t.id).map(tag =>
-        '<span class="b-chip ' + tag.league.toLowerCase() + (tag.role === 'dud' ? ' dud' : '') +
-        '" title="' + esc(tag.league) + ' ' + esc(roleLabel(tag.league, tag.role).toLowerCase()) +
-        ' pick: ' + esc(tag.member) + '">' + esc(tag.member) + '</span>').join('');
       return '<tr class="' + (i < 2 ? 'q' : '') + '">' +
         '<td><span class="group-team">' +
           (t.logos?.[0]?.href ? '<img src="' + esc(t.logos[0].href) + '" alt="" loading="lazy">' : '') +
           '<span' + faved + '>' + esc(t.displayName || t.name || '?') + '</span>' +
-          ownerChips +
         '</span></td>' +
         '<td>' + esc(statVal(en, ['gamesPlayed', 'GP'])) + '</td>' +
         '<td>' + esc(statVal(en, ['wins', 'W'])) + '</td>' +
@@ -1496,9 +1491,8 @@ function setChipLeague(league) {
   renderGroups();
 }
 function activeLeagues() {
-  // No tags anywhere until the viewer picks their league tab —
-  // nobody sees names from a draw they're not part of
-  return chipLeague && SWEEP_LEAGUES.includes(chipLeague) ? [chipLeague] : [];
+  // Tags from both leagues show everywhere; gold = Hoogies, teal = Shrunk
+  return SWEEP_LEAGUES;
 }
 
 function sweepTagsFor(teamId) {
