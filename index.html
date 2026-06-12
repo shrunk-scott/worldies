@@ -556,7 +556,19 @@
   }
   .charter-close:hover { border-color: var(--live); color: var(--live); }
   .charter-close:focus-visible { outline: 2px solid var(--pitch); }
-  #charterFrame { flex: 1; width: 100%; border: none; background: #fff; }
+  .charter-pages {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    background: #1a242f; padding: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .charter-pages canvas {
+    display: block; width: 100% !important; height: auto !important;
+    margin: 0 auto 12px; border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
+  .charter-loading {
+    color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px;
+  }
 
   footer {
     max-width: 760px; margin: 36px auto 0; padding: 0 20px;
@@ -705,7 +717,9 @@
       <a href="charter.pdf" target="_blank" rel="noopener" class="charter-newtab">Open in new tab</a>
       <button class="charter-close" id="charterClose" aria-label="Close charter">&#10005;</button>
     </div>
-    <iframe id="charterFrame" title="Competition Charter PDF"></iframe>
+    <div class="charter-pages" id="charterPages">
+      <div class="charter-loading">Loading charter&hellip;</div>
+    </div>
   </div>
 </div>
 
@@ -1989,11 +2003,58 @@ function renderSweeps(league) {
 }
 
 const charterModal = document.getElementById('charterModal');
-const charterFrame = document.getElementById('charterFrame');
+const charterPages = document.getElementById('charterPages');
+let charterRendered = false;
+let charterRendering = false;
+
+function loadPdfJs() {
+  return new Promise((resolve, reject) => {
+    if (window.pdfjsLib) return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      resolve();
+    };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function renderCharter() {
+  if (charterRendered || charterRendering) return;
+  charterRendering = true;
+  try {
+    await loadPdfJs();
+    const pdf = await window.pdfjsLib.getDocument('charter.pdf').promise;
+    charterPages.innerHTML = '';
+    const containerWidth = charterPages.clientWidth - 24;   // minus padding
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const base = page.getViewport({ scale: 1 });
+      const scale = (containerWidth / base.width) * dpr;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      charterPages.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    }
+    charterRendered = true;
+  } catch (err) {
+    charterPages.innerHTML = '<div class="charter-loading">Could not display the charter here. ' +
+      '<a href="charter.pdf" target="_blank" rel="noopener" style="color:var(--pitch)">Open the PDF directly</a>.</div>';
+  } finally {
+    charterRendering = false;
+  }
+}
+
 function openCharter() {
-  if (!charterFrame.src) charterFrame.src = 'charter.pdf';   // lazy first load
   charterModal.hidden = false;
   document.body.style.overflow = 'hidden';
+  renderCharter();
 }
 function closeCharter() {
   charterModal.hidden = true;
