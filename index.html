@@ -164,6 +164,22 @@
   }
   .cal-loading { font-size: 12px; color: var(--muted); text-align: center; padding: 6px 0 2px; }
 
+  /* Comp filter */
+  .comp-filter {
+    max-width: 760px; margin: 16px auto 0; padding: 0 20px;
+    display: flex; gap: 6px; justify-content: center;
+  }
+  .comp-btn {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+    color: var(--muted); font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 6px 16px; cursor: pointer;
+  }
+  .comp-btn:hover { color: var(--text); }
+  .comp-btn:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
+  .comp-btn.active { color: var(--text); border-color: var(--pitch); background: rgba(47,191,113,0.12); }
+  .comp-btn[data-comp="Hoogies"].active { border-color: var(--gold); background: rgba(232,184,75,0.12); }
+
   /* Search */
   .search-wrap {
     max-width: 760px; margin: 16px auto 0; padding: 0 20px;
@@ -507,6 +523,41 @@
   }
   .error-box { border-color: rgba(255,70,85,0.4); color: #f1a0a8; }
 
+  /* Charter modal */
+  .charter-modal {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(4, 8, 13, 0.82);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .charter-modal[hidden] { display: none; }
+  .charter-box {
+    background: #101b26; border: 1px solid var(--line); border-radius: 12px;
+    width: min(900px, 100%); height: min(92vh, 1100px);
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.6);
+  }
+  .charter-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+  }
+  .charter-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--gold); flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .charter-newtab { color: var(--muted); font-size: 12px; text-decoration: none; flex-shrink: 0; }
+  .charter-newtab:hover { color: var(--pitch); }
+  .charter-close {
+    background: none; border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); font-size: 14px; line-height: 1;
+    width: 30px; height: 30px; cursor: pointer; flex-shrink: 0;
+  }
+  .charter-close:hover { border-color: var(--live); color: var(--live); }
+  .charter-close:focus-visible { outline: 2px solid var(--pitch); }
+  #charterFrame { flex: 1; width: 100%; border: none; background: #fff; }
+
   footer {
     max-width: 760px; margin: 36px auto 0; padding: 0 20px;
     font-size: 13px; color: var(--muted); text-align: center; letter-spacing: 0.04em;
@@ -600,6 +651,12 @@
     </div>
   </div>
 
+  <div class="comp-filter" role="group" aria-label="Competition filter">
+    <button class="comp-btn" data-comp="all">All comps</button>
+    <button class="comp-btn" data-comp="Hoogies">Hoogies</button>
+    <button class="comp-btn" data-comp="Shrunk">Shrunk</button>
+  </div>
+
   <div class="search-wrap">
     <div class="member-picker">
       <button class="member-btn" id="memberBtn" aria-haspopup="listbox" aria-expanded="false">
@@ -639,6 +696,17 @@
       <div class="empty">Loading knockout draw…</div>
     </div>
   </main>
+</div>
+
+<div class="charter-modal" id="charterModal" hidden>
+  <div class="charter-box" role="dialog" aria-label="Competition Charter">
+    <div class="charter-head">
+      <span class="charter-title">Hoogies Competition Charter</span>
+      <a href="charter.pdf" target="_blank" rel="noopener" class="charter-newtab">Open in new tab</a>
+      <button class="charter-close" id="charterClose" aria-label="Close charter">&#10005;</button>
+    </div>
+    <iframe id="charterFrame" title="Competition Charter PDF"></iframe>
+  </div>
 </div>
 
 <footer>
@@ -1518,22 +1586,36 @@ function setChipLeague(league) {
   renderBracket();
   renderGroups();
 }
+/* Home-screen comp filter: All / Hoogies / Shrunk */
+let compFilter = store.get('wc26.comp', 'all');
 function activeLeagues() {
-  // Tags from both leagues show everywhere; gold = Hoogies, teal = Shrunk
-  return SWEEP_LEAGUES;
+  // Gold chips = Hoogies, teal = Shrunk
+  return SWEEP_LEAGUES.includes(compFilter) ? [compFilter] : SWEEP_LEAGUES;
 }
+function paintCompFilter() {
+  document.querySelectorAll('.comp-btn').forEach(btn =>
+    btn.classList.toggle('active',
+      btn.dataset.comp === compFilter || (btn.dataset.comp === 'all' && !SWEEP_LEAGUES.includes(compFilter))));
+}
+document.querySelectorAll('.comp-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    compFilter = btn.dataset.comp;
+    store.set('wc26.comp', compFilter);
+    paintCompFilter();
+    populateMemberFilter();
+    if (lastData) render(lastData);
+    renderCalendar();
+    renderBracket();
+  });
+});
 
 function sweepTagsFor(teamId) {
   const tags = [];
   if (!teamId) return tags;
-  const scoped = new Set(activeLeagues());
-  SWEEP_LEAGUES.forEach(league => {
+  activeLeagues().forEach(league => {
     sweeps[league].forEach(en => {
       if (en.teamId !== teamId) return;
-      const isSelectedMember = memberFilter && sameMember(en.member, memberFilter);
-      if (scoped.has(league) || isSelectedMember) {
-        tags.push({ league, member: en.member, role: en.role || 'best' });
-      }
+      tags.push({ league, member: en.member, role: en.role || 'best' });
     });
   });
   return tags;
@@ -1555,10 +1637,10 @@ function sameMember(a, b) {
 }
 
 function memberTeamIds(name) {
-  // Spans every league the member appears in (including alias names),
-  // so someone in both Hoogies and Shrunk sees all their teams at once
+  // Spans the leagues currently in play (all by default), so dual-league
+  // members see all their teams unless a single comp is selected
   const ids = new Set();
-  SWEEP_LEAGUES.forEach(league => {
+  activeLeagues().forEach(league => {
     sweeps[league].forEach(en => {
       if (sameMember(en.member, name) && en.teamId) ids.add(en.teamId);
     });
@@ -1572,9 +1654,9 @@ function memberLeagues(name) {
 }
 
 function populateMemberFilter() {
-  // Every player from every league is selectable
+  // Players from the selected comp (or all comps) are selectable
   const names = new Set();
-  SWEEP_LEAGUES.forEach(league =>
+  activeLeagues().forEach(league =>
     sweeps[league].forEach(en => names.add(en.member)));
   const sorted = [...names].sort((a, b) => a.localeCompare(b));
   if (memberFilter && !sorted.some(n => n.toLowerCase() === memberFilter.toLowerCase())) {
@@ -1879,7 +1961,7 @@ function renderSweeps(league) {
         entries.length + (entries.length === 1 ? ' team' : ' teams') +
         (locked ? ' &middot; draw locked in' : '') + '</span>' +
         (league === 'Hoogies'
-          ? '<a href="charter.pdf" target="_blank" rel="noopener" style="margin-left:auto;color:var(--gold);font-family:Barlow,sans-serif;font-size:13px;letter-spacing:0.02em;text-transform:none;font-weight:500;text-decoration:none;border:1px solid rgba(232,184,75,0.45);border-radius:6px;padding:3px 10px">Competition Charter</a>'
+          ? '<button class="charter-btn" style="margin-left:auto;background:none;cursor:pointer;color:var(--gold);font-family:Barlow,sans-serif;font-size:13px;letter-spacing:0.02em;text-transform:none;font-weight:500;border:1px solid rgba(232,184,75,0.45);border-radius:6px;padding:3px 10px">Competition Charter</button>'
           : '') +
       '</div>' +
       leaderboardHtml +
@@ -1906,7 +1988,28 @@ function renderSweeps(league) {
   }).join('');
 }
 
+const charterModal = document.getElementById('charterModal');
+const charterFrame = document.getElementById('charterFrame');
+function openCharter() {
+  if (!charterFrame.src) charterFrame.src = 'charter.pdf';   // lazy first load
+  charterModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function closeCharter() {
+  charterModal.hidden = true;
+  document.body.style.overflow = '';
+}
+document.getElementById('charterClose').addEventListener('click', closeCharter);
+charterModal.addEventListener('click', (e) => {
+  if (e.target === charterModal) closeCharter();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !charterModal.hidden) closeCharter();
+});
+
 sweepsMain.addEventListener('click', (e) => {
+  const charter = e.target.closest('.charter-btn');
+  if (charter) { openCharter(); return; }
   const add = e.target.closest('.sweep-add-btn');
   if (add) {
     const league = add.dataset.league;
@@ -2139,6 +2242,7 @@ document.addEventListener('visibilitychange', () => {
 /* ---------- Boot ---------- */
 
 updateDateLabel();
+paintCompFilter();
 populateMemberFilter();
 loadCalendarMonth();
 loadStandings();
