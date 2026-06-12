@@ -393,6 +393,34 @@
   }
   .sweep-add button:hover { border-color: var(--pitch); }
   .sweep-empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .leaderboard { margin-bottom: 16px; }
+  .leaderboard-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .lb-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .lb-table th {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 12px;
+    letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase;
+    text-align: right; padding: 3px 6px;
+  }
+  .lb-table th:nth-child(1), .lb-table th:nth-child(2) { text-align: left; }
+  .lb-table td {
+    padding: 7px 6px; text-align: right; font-variant-numeric: tabular-nums;
+    border-top: 1px solid rgba(31,49,66,0.6);
+  }
+  .lb-table td:nth-child(1), .lb-table td:nth-child(2) { text-align: left; }
+  .lb-rank {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    color: var(--muted); width: 30px;
+  }
+  .lb-member { font-weight: 600; }
+  .lb-pts { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; color: var(--pitch); }
+  .lb-table tr.lb-first td { background: rgba(232,184,75,0.08); }
+  .lb-table tr.lb-first .lb-member, .lb-table tr.lb-first .lb-rank { color: var(--gold); }
+  .lb-table tr.lb-last .lb-pts { color: var(--live); }
+
   .sweep-tag.hoogies { color: var(--gold); border: 1px solid rgba(232,184,75,0.45); }
   .sweep-tag.shrunk { color: var(--pitch); border: 1px solid rgba(47,191,113,0.45); }
   .sweep-tag.dud, .b-chip.dud { border-style: dashed; opacity: 0.85; }
@@ -1810,10 +1838,39 @@ function renderSweeps(league) {
   sweepsMain.innerHTML = [currentSweepLeague].map(league => {
     const locked = LOCKED_LEAGUES.has(league);
     let entries = sweeps[league];
+    let leaderboardHtml = '';
     if (league === 'Shrunk') {
       entries = entries.slice().sort((a, b) =>
         sweepPoints(b) - sweepPoints(a) || a.member.localeCompare(b.member) ||
         (a.teamName || '').localeCompare(b.teamName || ''));
+
+      // Member leaderboard: aggregate points across each member's teams
+      const totals = {};
+      sweeps[league].forEach(en => {
+        const k = en.member;
+        totals[k] = totals[k] || { pts: 0, alive: 0, teams: 0 };
+        totals[k].pts += sweepPoints(en);
+        totals[k].teams += 1;
+        if (!(en.teamId && eliminated[en.teamId])) totals[k].alive += 1;
+      });
+      const ranked = Object.keys(totals).sort((a, b) =>
+        totals[b].pts - totals[a].pts || a.localeCompare(b));
+      leaderboardHtml = '<div class="leaderboard">' +
+        '<div class="leaderboard-title">Leaderboard</div>' +
+        '<table class="lb-table">' +
+          '<thead><tr><th>#</th><th>Member</th><th>Teams alive</th><th>Pts</th></tr></thead>' +
+          '<tbody>' + ranked.map((name, i) => {
+            const t = totals[name];
+            const cls = i === 0 ? ' class="lb-first"' : (i === ranked.length - 1 ? ' class="lb-last"' : '');
+            return '<tr' + cls + '>' +
+              '<td class="lb-rank">' + (i + 1) + '</td>' +
+              '<td class="lb-member">' + esc(name) + '</td>' +
+              '<td>' + t.alive + '/' + t.teams + '</td>' +
+              '<td class="lb-pts">' + t.pts + '</td>' +
+            '</tr>';
+          }).join('') + '</tbody>' +
+        '</table>' +
+      '</div>';
     }
     const rows = entries.map((en, i) => sweepRow(league, en, i)).join('');
     return '<div class="sweep-league">' +
@@ -1825,6 +1882,7 @@ function renderSweeps(league) {
           ? '<a href="charter.pdf" target="_blank" rel="noopener" style="margin-left:auto;color:var(--gold);font-family:Barlow,sans-serif;font-size:13px;letter-spacing:0.02em;text-transform:none;font-weight:500;text-decoration:none;border:1px solid rgba(232,184,75,0.45);border-radius:6px;padding:3px 10px">Competition Charter</a>'
           : '') +
       '</div>' +
+      leaderboardHtml +
       (entries.length
         ? '<table class="sweep-table">' +
             '<thead><tr><th>Member</th><th>Team</th><th>Pick</th><th>GP</th><th>W</th><th>D</th><th>L</th>' +
