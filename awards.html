@@ -542,6 +542,15 @@
     font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
     color: #07130c; background: var(--gold); border-radius: 4px; padding: 1px 7px;
   }
+  .aw-badge.prelim { color: var(--pitch); background: none; border: 1px solid rgba(47,191,113,0.55); }
+  .aw-prelim-note {
+    font-family: 'Barlow', sans-serif; font-size: 12px; color: var(--pitch);
+    margin: -2px 0 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .aw-prelim-note::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--pitch); flex-shrink: 0; animation: pulse 1.6s ease-in-out infinite;
+  }
   .aw-flag {
     font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 600;
     letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
@@ -2629,7 +2638,8 @@ function computeAwards() {
           (cand.wg === punch.wg && cand.hdiff < punch.hdiff)))));   // most negative wins
     if (better) punch = cand;
   });
-  const punchAward = { key: 'punch', title: "Punchin'",
+  const punchAward = { key: 'punch', title: "Punchin'", preliminary: true,
+    prelimNote: 'Preliminary — stands until a bigger upset is recorded.',
     rule: 'Biggest upset victory by FIFA-ranking gap (positions as at 1 April 2026).' };
   if (punch) {
     punchAward.awarded = true;
@@ -2645,7 +2655,8 @@ function computeAwards() {
     if (!worst || cand.margin > worst.margin ||
         (cand.margin === worst.margin && cand.lg < worst.lg)) worst = cand;
   });
-  const bl = { key: 'bigloss', title: 'Biggest Loser',
+  const bl = { key: 'bigloss', title: 'Biggest Loser', preliminary: true,
+    prelimNote: 'Preliminary — stands until a heavier defeat is recorded.',
     rule: 'Heaviest defeat in a single match (greatest losing margin).' };
   if (worst) {
     bl.awarded = true;
@@ -2713,7 +2724,8 @@ function renderAwards() {
           : '<span class="aw-none">no Hoogies registrant</span>';
         return '<div class="aw-team"><span class="aw-team-name">' + esc(g.teamName) + '</span>' + chips + '</div>';
       }).join('');
-      body = '<div class="aw-detail">' + esc(aw.detail || '') + '</div>' +
+      body = (aw.preliminary ? '<div class="aw-prelim-note">' + esc(aw.prelimNote || 'Preliminary — can still change.') + '</div>' : '') +
+        '<div class="aw-detail">' + esc(aw.detail || '') + '</div>' +
         (teamsHtml || (aw.special ? '' : ''));
     } else if (aw.scanning) {
       body = '<div class="aw-status scanning">Checking match events…</div>';
@@ -2722,7 +2734,9 @@ function renderAwards() {
     }
     return '<div class="aw-card' + (aw.awarded ? ' won' : '') + '">' +
       '<div class="aw-head"><span class="aw-title">' + esc(aw.title) + '</span>' +
-        (aw.awarded ? '<span class="aw-badge">Awarded</span>' : '') +
+        (aw.awarded ? (aw.preliminary
+          ? '<span class="aw-badge prelim">Leading</span>'
+          : '<span class="aw-badge">Awarded</span>') : '') +
       '</div>' +
       '<div class="aw-rule">' + esc(aw.rule) + '</div>' +
       body +
