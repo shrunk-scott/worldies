@@ -562,6 +562,7 @@
     border: 1px solid rgba(232,184,75,0.45); border-radius: 4px; padding: 1px 7px;
   }
   .aw-chip.dud { border-style: dashed; opacity: 0.9; }
+  .aw-chip.lost { color: var(--muted); border-color: var(--line); opacity: 0.7; text-decoration: line-through; }
   .aw-none { font-size: 12px; color: var(--muted); }
 
   .empty, .error-box {
@@ -1655,6 +1656,9 @@ function buildTeamIndex() {
         w: statVal(en, ['wins', 'W']),
         d: statVal(en, ['ties', 'D']),
         l: statVal(en, ['losses', 'L']),
+        gf: statVal(en, ['pointsFor', 'goalsFor', 'GF']),
+        ga: statVal(en, ['pointsAgainst', 'goalsAgainst', 'GA']),
+        gd: statVal(en, ['pointDifferential', 'GD']),
         pts: statVal(en, ['points', 'PTS', 'P'])
       };
     });
@@ -2382,17 +2386,19 @@ document.addEventListener('visibilitychange', () => {
 })();
 
 /* ---------- Hoogies Awards ---------- */
-/* All prizes: first-occurrence (locked once triggered), paying BOTH the Golden
-   and the Sh*t pot holder of the team involved. Six are computed from the
-   charter rules as understood; "Going Home" and "Nobel Peace Prize" use a
-   best-guess rule pending the exact charter wording (flagged in the UI). */
+/* Calculations follow the Competition Charter award rules.
+   Six awards are computed live from the ESPN feed. Where a winning team is a
+   "Shared Team" (held by two registrants), the charter tie-breaks decide who
+   collects:
+     - Winner / Losing Finalist: by the registrants' final-score predictions
+       (entered off-app), so both are shown until that is resolved.
+     - All others: by the registrant's SECOND team's performance up to the day
+       the prize is conferred — most positive goal difference, then most goals
+       scored, then lowest per-capita greenhouse emissions. */
 
-const HOST_NATIONS = ['united states', 'usa', 'canada', 'mexico'];
-
-/* Power ranking proxy derived from the Shrunk draw order (48 teams, strongest
-   first), used to detect upsets for Punchin'. Keyed by ESPN team id (resolved
-   through the same alias logic as the draws) so it matches the ids on match
-   data regardless of how the name is spelt. */
+/* Power ranking proxy from the Shrunk draw order (48 teams, strongest first),
+   standing in for the FIFA ranking gap used by the Punchin' Award. Keyed by
+   ESPN team id via the draws' alias logic so it matches live match data. */
 let POWER_RANK_BY_ID = null;
 function buildPowerRank() {
   POWER_RANK_BY_ID = {};
@@ -2407,8 +2413,32 @@ function rankOf(teamId) {
   return (POWER_RANK_BY_ID && POWER_RANK_BY_ID[teamId]) || 999;
 }
 
+/* Per-capita greenhouse emissions (t CO2e), approx., Our World in Data — the
+   charter's final Shared Team tie-break (lowest wins). Keyed by team id. */
+const GHG_CANON = {
+  'France': 6, 'Spain': 7, 'Argentina': 8, 'England': 7, 'Portugal': 6, 'Brazil': 9,
+  'Netherlands': 11, 'Morocco': 3, 'Belgium': 10, 'Germany': 10, 'Croatia': 7,
+  'Colombia': 6, 'Senegal': 2, 'Mexico': 6, 'USA': 18, 'Uruguay': 12, 'Japan': 9,
+  'Switzerland': 6, 'Iran': 9, 'Türkiye': 6, 'Ecuador': 6, 'Austria': 9,
+  'South Korea': 14, 'Australia': 21, 'Algeria': 7, 'Egypt': 5, 'Canada': 19,
+  'Norway': 8, 'Panama': 6, 'Ivory Coast': 2, 'Sweden': 5, 'Paraguay': 15,
+  'Czechia': 12, 'Scotland': 7, 'Tunisia': 4, 'DR Congo': 3, 'Uzbekistan': 7,
+  'Qatar': 35, 'Iraq': 8, 'South Africa': 9, 'Saudi Arabia': 22, 'Jordan': 5,
+  'Bosnia and Herzegovina': 8, 'Cape Verde': 1, 'Ghana': 2, 'Curaçao': 10,
+  'Haiti': 0.6, 'New Zealand': 17
+};
+let GHG_BY_ID = null;
+function buildGhg() {
+  GHG_BY_ID = {};
+  Object.keys(GHG_CANON).forEach(n => { const id = resolveTeamId(n); if (id) GHG_BY_ID[id] = GHG_CANON[n]; });
+}
+function ghgOf(teamId) {
+  if ((!GHG_BY_ID || !Object.keys(GHG_BY_ID).length) && Object.keys(teamIndex).length) buildGhg();
+  return GHG_BY_ID ? (GHG_BY_ID[teamId] ?? null) : null;
+}
+
 let awardsEvents = null;
-let dohResult = null, nobelResult = null;
+let dohResult = null;
 const summaryScan = { running: false, done: false };
 
 function hoogiesHolders(teamId) {
@@ -2416,8 +2446,13 @@ function hoogiesHolders(teamId) {
   return sweeps.Hoogies.filter(en => en.teamId === teamId)
     .map(en => ({ member: en.member, role: en.role || 'best' }));
 }
+function secondTeamId(member, awardedTeamId) {
+  const e = sweeps.Hoogies.find(x => x.member === member && x.teamId && x.teamId !== awardedTeamId);
+  return e ? e.teamId : null;
+}
 
 function fmtDay(iso) { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); }
+function num(v) { const n = Number(v); return isNaN(n) ? null : n; }
 
 function awardsCompleted() {
   return (awardsEvents || [])
@@ -2434,6 +2469,8 @@ function awardsCompleted() {
       return {
         id: ev.id, date: ev.date, slug: ev.season?.slug || '',
         h, a, hs, as, margin: Math.abs(hs - as), winner, loser,
+        winnerGoals: winner ? (winner === h ? hs : as) : null,
+        loserGoals: loser ? (loser === h ? hs : as) : null,
         label: (h.team?.displayName || '?') + ' ' + (isNaN(hs) ? '' : hs) + '\u2013' +
                (isNaN(as) ? '' : as) + ' ' + (a.team?.displayName || '?')
       };
@@ -2442,81 +2479,207 @@ function awardsCompleted() {
     .sort((x, y) => new Date(x.date) - new Date(y.date) || (x.id > y.id ? 1 : -1));
 }
 
+/* Cumulative goals for/against per team up to (and including) a given day —
+   used for the Shared Team second-team tie-break. */
+function teamCumulativeUpTo(dateIso) {
+  const lim = new Date(dateIso).getTime();
+  const stats = {};
+  awardsCompleted().forEach(m => {
+    if (new Date(m.date).getTime() > lim) return;
+    const hid = m.h.team?.id, aid = m.a.team?.id;
+    if (hid) { stats[hid] = stats[hid] || { gf: 0, ga: 0 }; stats[hid].gf += m.hs; stats[hid].ga += m.as; }
+    if (aid) { stats[aid] = stats[aid] || { gf: 0, ga: 0 }; stats[aid].gf += m.as; stats[aid].ga += m.hs; }
+  });
+  return stats;
+}
+
+/* Resolve which registrant(s) collect for a winning team, applying the
+   Shared Team tie-break. Returns [{member, role, won, note}]. */
+function resolveAward(teamId, key, conferDate) {
+  const holders = hoogiesHolders(teamId);
+  if (holders.length <= 1) return holders.map(h => ({ member: h.member, role: h.role, won: true }));
+
+  if (key === 'winner' || key === 'finalist') {
+    return holders.map(h => ({ member: h.member, role: h.role, won: true,
+      note: 'Shared Team — decided by final-score prediction' }));
+  }
+
+  const cum = teamCumulativeUpTo(conferDate || new Date().toISOString());
+  const scored = holders.map(h => {
+    const other = secondTeamId(h.member, teamId);
+    const s = other ? cum[other] : null;
+    return {
+      member: h.member, role: h.role, other,
+      otherName: other ? (teamIndex[other]?.name || '') : '',
+      gd: s ? (s.gf - s.ga) : null,
+      gf: s ? s.gf : null,
+      ghg: other ? ghgOf(other) : null
+    };
+  });
+  const ranked = scored.slice().sort((a, b) =>
+    ((b.gd ?? -99) - (a.gd ?? -99)) ||
+    ((b.gf ?? -99) - (a.gf ?? -99)) ||
+    ((a.ghg ?? Infinity) - (b.ghg ?? Infinity)));
+  const top = ranked[0];
+  const fullTie = ranked.length > 1 &&
+    ranked[0].gd === ranked[1].gd && ranked[0].gf === ranked[1].gf && ranked[0].ghg === ranked[1].ghg;
+  return scored.map(h => ({
+    member: h.member, role: h.role,
+    won: fullTie ? true : (h.member === top.member),
+    note: 'Shared — 2nd team ' + (h.otherName || '?') + ': GD ' +
+      (h.gd ?? '?') + ', GF ' + (h.gf ?? '?') + (h.ghg != null ? ', GHG ' + h.ghg : '')
+  }));
+}
+function withResolved(groups, key) {
+  return groups.map(g => ({
+    teamId: g.teamId, teamName: teamIndex[g.teamId]?.name || (g.teamName || ''),
+    regs: resolveAward(g.teamId, key, g.date)
+  }));
+}
+
+/* Going Home (eliminate England) / Nobel Peace Prize (eliminate USA) share a
+   structure: award to whoever knocks the target out. */
+function eliminationAward(targetId, opts) {
+  const out = { awarded: false, groups: [] };
+  if (!targetId) return out;
+  const M = awardsCompleted();
+  const finalM = M.find(m => m.slug === 'final');
+  if (finalM && finalM.winner?.team?.id === targetId) {
+    out.awarded = true; out.special = true;
+    out.detail = (teamIndex[targetId]?.name || '') + ' won the World Cup — ' + opts.championNote;
+    if (opts.foldToWinner) out.groups = [{ teamId: targetId, date: finalM.date }];
+    return out;
+  }
+  const koLoss = M.filter(m => m.slug !== 'group-stage' && m.slug !== 'third-place-match' &&
+    m.loser?.team?.id === targetId).sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+  if (koLoss) {
+    out.awarded = true;
+    out.detail = (teamIndex[targetId]?.name || '') + ' eliminated by ' +
+      (koLoss.winner.team?.displayName || '?') + ' — ' + fmtDay(koLoss.date);
+    out.groups = [{ teamId: koLoss.winner.team?.id, date: koLoss.date }];
+    return out;
+  }
+  // group-stage elimination: target made no knockout appearance
+  const advanced = (awardsEvents || []).some(ev => {
+    const slug = ev.season?.slug || '';
+    if (slug === 'group-stage') return false;
+    return (ev.competitions?.[0]?.competitors || []).some(c => c.team?.id === targetId);
+  });
+  const groupGames = M.filter(m => m.slug === 'group-stage' &&
+    (m.h.team?.id === targetId || m.a.team?.id === targetId));
+  if (!advanced && groupGames.length >= 3) {
+    const beaters = groupGames.filter(m => m.loser?.team?.id === targetId)
+      .map(m => ({ teamId: m.winner.team?.id, date: m.date }));
+    out.awarded = true;
+    out.detail = (teamIndex[targetId]?.name || '') + ' out at the group stage' +
+      (beaters.length ? ' — shared among teams that beat them' : ' (no group-stage defeat)');
+    out.groups = beaters;
+  }
+  return out;
+}
+
 function computeAwards() {
   const M = awardsCompleted();
-  const find = pred => M.find(pred) || null;
+  const ENG = resolveTeamId('England');
+  const USA = resolveTeamId('USA');
 
   // World Cup Winner & Losing Finalist
   const finalM = M.find(m => m.slug === 'final');
-  const winnerAward = { key: 'winner', title: 'World Cup Winner',
+  const winner = { key: 'winner', title: 'World Cup Winner',
     rule: 'Both holders of the team that wins the World Cup.' };
   if (finalM && finalM.winner) {
-    winnerAward.awarded = true; winnerAward.teamIds = [finalM.winner.team?.id];
-    winnerAward.detail = (finalM.winner.team?.displayName || '') + ' — Final, ' + fmtDay(finalM.date);
+    winner.awarded = true;
+    winner.detail = (finalM.winner.team?.displayName || '') + ' — Final, ' + fmtDay(finalM.date);
+    winner.groups = withResolved([{ teamId: finalM.winner.team?.id, date: finalM.date }], 'winner');
   }
-  const finalistAward = { key: 'finalist', title: 'Losing Finalist',
+  const finalist = { key: 'finalist', title: 'Losing Finalist',
     rule: 'Both holders of the team that loses the Final.' };
   if (finalM && finalM.loser) {
-    finalistAward.awarded = true; finalistAward.teamIds = [finalM.loser.team?.id];
-    finalistAward.detail = (finalM.loser.team?.displayName || '') + ' — Final, ' + fmtDay(finalM.date);
+    finalist.awarded = true;
+    finalist.detail = (finalM.loser.team?.displayName || '') + ' — Final, ' + fmtDay(finalM.date);
+    finalist.groups = withResolved([{ teamId: finalM.loser.team?.id, date: finalM.date }], 'finalist');
   }
 
-  // Punchin' — first match won by the lower-ranked side (both ranks must resolve)
-  const punchM = find(m => {
-    if (!m.winner || !m.loser) return false;
+  // Punchin' — biggest upset by ranking gap; tie-break: match GD, then winner goals
+  let punch = null;
+  M.forEach(m => {
+    if (!m.winner || !m.loser) return;
     const wr = rankOf(m.winner.team?.id), lr = rankOf(m.loser.team?.id);
-    return wr < 900 && lr < 900 && wr > lr;
+    if (wr >= 900 || lr >= 900 || wr <= lr) return;   // must be a resolved upset
+    const cand = { m, diff: wr - lr, gd: m.margin, wg: m.winnerGoals };
+    if (!punch || cand.diff > punch.diff ||
+        (cand.diff === punch.diff && (cand.gd > punch.gd ||
+        (cand.gd === punch.gd && cand.wg > punch.wg)))) punch = cand;
   });
   const punchAward = { key: 'punch', title: "Punchin'",
-    rule: 'First giant-killing — first match won by the lower-ranked team.' };
-  if (punchM) {
-    punchAward.awarded = true; punchAward.teamIds = [punchM.winner.team?.id];
-    const gap = rankOf(punchM.winner.team?.id) - rankOf(punchM.loser.team?.id);
-    punchAward.detail = punchM.label + ' — ' + fmtDay(punchM.date) + ' (rank gap ' + gap + ')';
+    rule: 'Biggest upset victory by FIFA-ranking gap (pre-tournament seeding).' };
+  if (punch) {
+    punchAward.awarded = true;
+    punchAward.detail = punch.m.label + ' — ' + fmtDay(punch.m.date) + ' (rank gap ' + punch.diff + ')';
+    punchAward.groups = withResolved([{ teamId: punch.m.winner.team?.id, date: punch.m.date }], 'punch');
   }
 
-  // Biggest Loser — first defeat by 3+ goals
-  const BL_MARGIN = 3;
-  const blM = find(m => m.loser && m.margin >= BL_MARGIN);
-  const blAward = { key: 'bigloss', title: 'Biggest Loser',
-    rule: 'Both holders of the first team to lose by ' + BL_MARGIN + '+ goals.' };
-  if (blM) {
-    blAward.awarded = true; blAward.teamIds = [blM.loser.team?.id];
-    blAward.detail = blM.label + ' — ' + fmtDay(blM.date) + ' (' + blM.margin + '-goal margin)';
+  // Biggest Loser — heaviest defeat; tie-break: margin, then fewest goals by loser
+  let worst = null;
+  M.forEach(m => {
+    if (!m.loser) return;
+    const cand = { m, margin: m.margin, lg: m.loserGoals };
+    if (!worst || cand.margin > worst.margin ||
+        (cand.margin === worst.margin && cand.lg < worst.lg)) worst = cand;
+  });
+  const bl = { key: 'bigloss', title: 'Biggest Loser',
+    rule: 'Heaviest defeat in a single match (greatest losing margin).' };
+  if (worst) {
+    bl.awarded = true;
+    bl.detail = worst.m.label + ' — ' + fmtDay(worst.m.date) + ' (' + worst.margin + '-goal margin)';
+    bl.groups = withResolved([{ teamId: worst.m.loser.team?.id, date: worst.m.date }], 'bigloss');
   }
 
-  // Soccer Sucks — first 0–0
-  const ssM = find(m => m.hs === 0 && m.as === 0);
+  // The Doh — team that concedes the first own goal (summary scan)
+  const doh = { key: 'doh', title: 'The "Doh"',
+    rule: 'The team that concedes the first own goal of the tournament.' };
+  if (dohResult) {
+    doh.awarded = true; doh.detail = dohResult.detail;
+    doh.groups = withResolved([{ teamId: dohResult.teamId, date: dohResult.date }], 'doh');
+  } else if (!summaryScan.done) doh.scanning = true;
+
+  // Soccer Sucks — first 0–0 (KO 0–0 after regulation also qualifies); both teams
+  const ss = M.find(m => m.hs === 0 && m.as === 0);
   const ssAward = { key: 'soccersucks', title: 'Soccer Sucks',
-    rule: 'Both holders of both teams in the first 0–0 of the tournament.' };
-  if (ssM) {
-    ssAward.awarded = true; ssAward.teamIds = [ssM.h.team?.id, ssM.a.team?.id];
-    ssAward.detail = ssM.label + ' — ' + fmtDay(ssM.date);
+    rule: 'The two teams in the first 0–0 of the tournament — prize split between them.' };
+  if (ss) {
+    ssAward.awarded = true;
+    ssAward.detail = ss.label + ' — ' + fmtDay(ss.date);
+    ssAward.groups = withResolved([
+      { teamId: ss.h.team?.id, date: ss.date }, { teamId: ss.a.team?.id, date: ss.date }
+    ], 'soccersucks');
   }
 
-  // Going Home (rule unconfirmed) — first host nation knocked out
-  const ghM = M.find(m => m.slug !== 'group-stage' && m.slug !== 'third-place-match' &&
-    m.loser && HOST_NATIONS.includes(normName(m.loser.team?.displayName || '')));
-  const ghAward = { key: 'goinghome', title: 'Going Home', unconfirmed: true,
-    rule: 'Assumed: both holders of the first host nation (USA, Canada, Mexico) knocked out.' };
-  if (ghM) {
-    ghAward.awarded = true; ghAward.teamIds = [ghM.loser.team?.id];
-    ghAward.detail = (ghM.loser.team?.displayName || '') + ' eliminated — ' + fmtDay(ghM.date);
+  // Going Home — eliminate England
+  const gh = eliminationAward(ENG, { championNote: 'added to the World Cup Winner prize', foldToWinner: true });
+  const ghAward = { key: 'goinghome', title: 'Going Home',
+    rule: 'For eliminating England (shared among group-stage conquerors if England fall early).' };
+  Object.assign(ghAward, gh);
+  if (gh.awarded && gh.groups?.length) ghAward.groups = withResolved(gh.groups, gh.special ? 'winner' : 'goinghome');
+
+  // Nobel Peace Prize — eliminate USA
+  const nb = eliminationAward(USA, { championNote: 'donated to the UN Human Rights Office', foldToWinner: false });
+  const nbAward = { key: 'nobel', title: 'Nobel Peace Prize',
+    rule: 'For eliminating the USA (shared among group-stage conquerors if the USA fall early).' };
+  Object.assign(nbAward, nb);
+  if (nb.awarded && nb.groups?.length) nbAward.groups = withResolved(nb.groups, 'nobel');
+
+  return [winner, finalist, punchAward, bl, doh, ssAward, ghAward, nbAward];
+}
+
+function regChip(r) {
+  const lbl = r.role === 'dud' ? ' (Sh*t)' : ' (Golden)';
+  if (r.won) {
+    return '<span class="aw-chip' + (r.role === 'dud' ? ' dud' : '') + '" title="' +
+      esc(r.note || '') + '">' + esc(r.member) + lbl + '</span>';
   }
-
-  // The Doh — first own goal (from summary scan)
-  const dohAward = { key: 'doh', title: 'The Doh',
-    rule: 'Both holders of the team that scores the first own goal.' };
-  if (dohResult) { dohAward.awarded = true; dohAward.teamIds = [dohResult.teamId]; dohAward.detail = dohResult.detail; }
-  else if (!summaryScan.done) dohAward.scanning = true;
-
-  // Nobel Peace Prize (rule unconfirmed) — first red card (from summary scan)
-  const nobelAward = { key: 'nobel', title: 'Nobel Peace Prize', unconfirmed: true,
-    rule: 'Assumed: both holders of the team shown the first red card.' };
-  if (nobelResult) { nobelAward.awarded = true; nobelAward.teamIds = [nobelResult.teamId]; nobelAward.detail = nobelResult.detail; }
-  else if (!summaryScan.done) nobelAward.scanning = true;
-
-  return [winnerAward, finalistAward, punchAward, blAward, ssAward, dohAward, ghAward, nobelAward];
+  return '<span class="aw-chip lost" title="' + esc(r.note || '') + '">' +
+    esc(r.member) + lbl + ' — loses tie-break</span>';
 }
 
 function renderAwards() {
@@ -2526,19 +2689,14 @@ function renderAwards() {
   wrap.innerHTML = awards.map(aw => {
     let body;
     if (aw.awarded) {
-      const chips = (aw.teamIds || []).map(id => {
-        const holders = hoogiesHolders(id);
-        const tname = teamIndex[id]?.name || '';
-        if (!holders.length) {
-          return '<div class="aw-team"><span class="aw-team-name">' + esc(tname) +
-            '</span><span class="aw-none">no Hoogies entry</span></div>';
-        }
-        return '<div class="aw-team"><span class="aw-team-name">' + esc(tname) + '</span>' +
-          holders.map(h => '<span class="aw-chip' + (h.role === 'dud' ? ' dud' : '') + '">' +
-            esc(h.member) + (h.role === 'dud' ? ' (Sh*t)' : ' (Golden)') + '</span>').join('') +
-        '</div>';
+      const teamsHtml = (aw.groups || []).map(g => {
+        const chips = g.regs.length
+          ? g.regs.map(regChip).join('')
+          : '<span class="aw-none">no Hoogies registrant</span>';
+        return '<div class="aw-team"><span class="aw-team-name">' + esc(g.teamName) + '</span>' + chips + '</div>';
       }).join('');
-      body = '<div class="aw-detail">' + esc(aw.detail || '') + '</div>' + chips;
+      body = '<div class="aw-detail">' + esc(aw.detail || '') + '</div>' +
+        (teamsHtml || (aw.special ? '' : ''));
     } else if (aw.scanning) {
       body = '<div class="aw-status scanning">Checking match events…</div>';
     } else {
@@ -2546,7 +2704,6 @@ function renderAwards() {
     }
     return '<div class="aw-card' + (aw.awarded ? ' won' : '') + '">' +
       '<div class="aw-head"><span class="aw-title">' + esc(aw.title) + '</span>' +
-        (aw.unconfirmed ? '<span class="aw-flag">rule unconfirmed</span>' : '') +
         (aw.awarded ? '<span class="aw-badge">Awarded</span>' : '') +
       '</div>' +
       '<div class="aw-rule">' + esc(aw.rule) + '</div>' +
@@ -2556,13 +2713,12 @@ function renderAwards() {
 }
 
 async function scanSummaries() {
-  if (summaryScan.running || summaryScan.done) return;
-  if (dohResult && nobelResult) { summaryScan.done = true; return; }
+  if (summaryScan.running || summaryScan.done || dohResult) { if (dohResult) summaryScan.done = true; return; }
   summaryScan.running = true;
   const M = awardsCompleted();
   let count = 0;
   for (const m of M) {
-    if (dohResult && nobelResult) break;
+    if (dohResult) break;
     if (count++ > 90) break;   // cap fetches so we never hammer the feed
     try {
       const res = await fetch(SUMMARY_URL + encodeURIComponent(m.id));
@@ -2571,21 +2727,17 @@ async function scanSummaries() {
       const ke = d.keyEvents || [];
       for (const e of ke) {
         const t = (e.type?.text || '').toLowerCase();
-        if (!dohResult && t.includes('own goal')) {
-          dohResult = { teamId: e.team?.id,
+        if (t.includes('own goal')) {
+          dohResult = { teamId: e.team?.id, date: m.date,
             detail: (teamIndex[e.team?.id]?.name || e.team?.displayName || 'Own goal') +
-              ' — ' + m.label + ', ' + fmtDay(m.date) };
-        }
-        if (!nobelResult && (t.includes('red card') || t.includes('sent off'))) {
-          nobelResult = { teamId: e.team?.id,
-            detail: (teamIndex[e.team?.id]?.name || e.team?.displayName || 'Red card') +
-              ' — ' + m.label + ', ' + fmtDay(m.date) };
+              ' conceded — ' + m.label + ', ' + fmtDay(m.date) };
+          break;
         }
       }
     } catch (e) { /* skip this match */ }
   }
   summaryScan.running = false;
-  if ((dohResult && nobelResult) || count > 90) summaryScan.done = true;
+  if (dohResult || count > 90) summaryScan.done = true;
   renderAwards();
 }
 
