@@ -2396,21 +2396,56 @@ document.addEventListener('visibilitychange', () => {
        the prize is conferred — most positive goal difference, then most goals
        scored, then lowest per-capita greenhouse emissions. */
 
-/* Power ranking proxy from the Shrunk draw order (48 teams, strongest first),
-   standing in for the FIFA ranking gap used by the Punchin' Award. Keyed by
-   ESPN team id via the draws' alias logic so it matches live match data. */
-let POWER_RANK_BY_ID = null;
-function buildPowerRank() {
-  POWER_RANK_BY_ID = {};
-  SHRUNK_DRAW.forEach(([name], i) => {
-    const id = resolveTeamId(name);
-    if (id) POWER_RANK_BY_ID[id] = i + 1;
-  });
+/* Actual FIFA Men's World Ranking positions as at 1 April 2026 (the date the
+   charter pins for the Punchin' Award). The upset "scale" is the gap between
+   these positions. Keyed to ESPN team ids via the draws' alias logic. */
+const FIFA_RANK_2026 = {
+  'France': 1, 'Spain': 2, 'Argentina': 3, 'England': 4, 'Portugal': 5, 'Brazil': 6,
+  'Netherlands': 7, 'Morocco': 8, 'Belgium': 9, 'Germany': 10, 'Croatia': 11,
+  'Colombia': 13, 'Senegal': 14, 'Mexico': 15, 'USA': 16, 'Uruguay': 17, 'Japan': 18,
+  'Switzerland': 19, 'Iran': 21, 'Türkiye': 22, 'Ecuador': 23, 'Austria': 24,
+  'South Korea': 25, 'Australia': 27, 'Algeria': 28, 'Egypt': 29, 'Canada': 30,
+  'Norway': 31, 'Panama': 33, 'Ivory Coast': 34, 'Sweden': 38, 'Paraguay': 40,
+  'Czechia': 41, 'Scotland': 43, 'Tunisia': 44, 'DR Congo': 46, 'Uzbekistan': 50,
+  'Qatar': 55, 'Iraq': 57, 'South Africa': 60, 'Saudi Arabia': 61, 'Jordan': 63,
+  'Bosnia and Herzegovina': 65, 'Cape Verde': 69, 'Ghana': 74, 'Curaçao': 82,
+  'Haiti': 83, 'New Zealand': 85
+};
+let FIFA_RANK_BY_ID = null;
+function buildRankIndex() {
+  FIFA_RANK_BY_ID = {};
+  Object.keys(FIFA_RANK_2026).forEach(n => { const id = resolveTeamId(n); if (id) FIFA_RANK_BY_ID[id] = FIFA_RANK_2026[n]; });
 }
 function rankOf(teamId) {
-  if ((!POWER_RANK_BY_ID || !Object.keys(POWER_RANK_BY_ID).length) &&
-      Object.keys(teamIndex).length) buildPowerRank();
-  return (POWER_RANK_BY_ID && POWER_RANK_BY_ID[teamId]) || 999;
+  if ((!FIFA_RANK_BY_ID || !Object.keys(FIFA_RANK_BY_ID).length) &&
+      Object.keys(teamIndex).length) buildRankIndex();
+  return (FIFA_RANK_BY_ID && FIFA_RANK_BY_ID[teamId]) || 999;
+}
+
+/* Approximate average squad heights (cm) — the charter's final Punchin'
+   tie-break ("greatest negative differential in average height between winner
+   and opponent"). Only consulted if rank gap, match goal difference and winner
+   goals all tie. Edit with exact figures if you have them. */
+const HEIGHT_CM = {
+  'France': 182, 'Spain': 180, 'Argentina': 179, 'England': 182, 'Portugal': 181,
+  'Brazil': 180, 'Netherlands': 184, 'Morocco': 181, 'Belgium': 183, 'Germany': 183,
+  'Croatia': 183, 'Colombia': 178, 'Senegal': 183, 'Mexico': 178, 'USA': 182,
+  'Uruguay': 180, 'Japan': 178, 'Switzerland': 182, 'Iran': 183, 'Türkiye': 182,
+  'Ecuador': 178, 'Austria': 182, 'South Korea': 182, 'Australia': 182, 'Algeria': 181,
+  'Egypt': 181, 'Canada': 182, 'Norway': 183, 'Panama': 180, 'Ivory Coast': 182,
+  'Sweden': 184, 'Paraguay': 179, 'Czechia': 183, 'Scotland': 181, 'Tunisia': 181,
+  'DR Congo': 182, 'Uzbekistan': 182, 'Qatar': 180, 'Iraq': 181, 'South Africa': 179,
+  'Saudi Arabia': 180, 'Jordan': 180, 'Bosnia and Herzegovina': 184, 'Cape Verde': 181,
+  'Ghana': 181, 'Curaçao': 181, 'Haiti': 179, 'New Zealand': 183
+};
+let HEIGHT_BY_ID = null;
+function buildHeights() {
+  HEIGHT_BY_ID = {};
+  Object.keys(HEIGHT_CM).forEach(n => { const id = resolveTeamId(n); if (id) HEIGHT_BY_ID[id] = HEIGHT_CM[n]; });
+}
+function heightOf(teamId) {
+  if ((!HEIGHT_BY_ID || !Object.keys(HEIGHT_BY_ID).length) && Object.keys(teamIndex).length) buildHeights();
+  return HEIGHT_BY_ID ? (HEIGHT_BY_ID[teamId] ?? null) : null;
 }
 
 /* Per-capita greenhouse emissions (t CO2e), approx., Our World in Data — the
@@ -2600,19 +2635,28 @@ function computeAwards() {
     finalist.groups = withResolved([{ teamId: finalM.loser.team?.id, date: finalM.date }], 'finalist');
   }
 
-  // Punchin' — biggest upset by ranking gap; tie-break: match GD, then winner goals
+  // Punchin' — biggest upset by FIFA-ranking gap (1 Apr 2026); tie-breaks:
+  // match goal difference, then winner goals, then most-negative height gap
   let punch = null;
   M.forEach(m => {
     if (!m.winner || !m.loser) return;
     const wr = rankOf(m.winner.team?.id), lr = rankOf(m.loser.team?.id);
     if (wr >= 900 || lr >= 900 || wr <= lr) return;   // must be a resolved upset
-    const cand = { m, diff: wr - lr, gd: m.margin, wg: m.winnerGoals };
-    if (!punch || cand.diff > punch.diff ||
-        (cand.diff === punch.diff && (cand.gd > punch.gd ||
-        (cand.gd === punch.gd && cand.wg > punch.wg)))) punch = cand;
+    const wh = heightOf(m.winner.team?.id), oh = heightOf(m.loser.team?.id);
+    const hdiff = (wh != null && oh != null) ? (wh - oh) : 0;   // negative = winner shorter
+    const cand = { m, diff: wr - lr, gd: m.margin, wg: m.winnerGoals, hdiff };
+    if (!punch) { punch = cand; return; }
+    const better =
+      cand.diff > punch.diff ||
+      (cand.diff === punch.diff && (
+        cand.gd > punch.gd ||
+        (cand.gd === punch.gd && (
+          cand.wg > punch.wg ||
+          (cand.wg === punch.wg && cand.hdiff < punch.hdiff)))));
+    if (better) punch = cand;
   });
   const punchAward = { key: 'punch', title: "Punchin'",
-    rule: 'Biggest upset victory by FIFA-ranking gap (pre-tournament seeding).' };
+    rule: 'Biggest upset victory by FIFA-ranking gap (positions as at 1 April 2026).' };
   if (punch) {
     punchAward.awarded = true;
     punchAward.detail = punch.m.label + ' — ' + fmtDay(punch.m.date) + ' (rank gap ' + punch.diff + ')';
