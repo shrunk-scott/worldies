@@ -611,7 +611,6 @@
     color: var(--text); font-family: inherit; font-size: 14px; padding: 7px 11px; min-width: 150px;
   }
   .poll-name:focus { outline: none; border-color: var(--pitch); }
-  .poll-sync { font-size: 12px; color: var(--muted); }
   .poll-card {
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
     padding: 14px 16px; margin-top: 14px; backdrop-filter: blur(2px);
@@ -2829,12 +2828,13 @@ function renderPolls() {
   const members = [...new Set(sweeps.Hoogies.map(e => e.member))].sort((a, b) => a.localeCompare(b));
   const teams = teamNameList();
 
+  const voterOptions = [...new Set([...(voterName ? [voterName] : []), ...members])];
   let html =
     '<div class="poll-voter">Voting as ' +
-      '<input list="voterNames" id="voterInput" class="poll-name" placeholder="your name" value="' + esc(voterName) + '">' +
-      '<datalist id="voterNames">' + members.map(m => '<option value="' + esc(m) + '">').join('') + '</datalist>' +
-      (PREDICTIONS_WEBAPP_URL ? '<span class="poll-sync">shared via Google Sheet</span>'
-                              : '<span class="poll-sync">this device only</span>') +
+      '<select id="voterInput" class="poll-name">' +
+        '<option value="">Select your name\u2026</option>' +
+        voterOptions.map(m => '<option value="' + esc(m) + '"' + (m === voterName ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+      '</select>' +
     '</div>';
 
   // Overall winner poll (select of all teams), closes at the final
