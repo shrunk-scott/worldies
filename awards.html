@@ -661,6 +661,29 @@
     text-transform: uppercase; color: var(--muted); margin-top: 10px;
   }
   .poll-loading { font-size: 13px; color: var(--muted); }
+  .poll-closed {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600;
+    letter-spacing: 0.04em; color: var(--live); margin-bottom: 8px;
+    border: 1px solid rgba(255,70,85,0.4); border-radius: 7px; padding: 7px 11px;
+    display: inline-block;
+  }
+  .poll-section {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+    margin: 26px 0 4px;
+  }
+  .poll-when { font-size: 12px; color: var(--muted); margin: -6px 0 10px; }
+  .poll-opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .poll-opt {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600;
+    letter-spacing: 0.02em; padding: 8px 13px; cursor: pointer;
+  }
+  .poll-opt img { width: 20px; height: 20px; object-fit: contain; }
+  .poll-opt:hover { border-color: var(--pitch); }
+  .poll-opt:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
+  .poll-opt.chosen { border-color: var(--gold); background: rgba(232,184,75,0.14); color: var(--gold); }
 
   .empty, .error-box {
     background: var(--panel); border: 1px dashed var(--line); border-radius: 10px;
@@ -1556,6 +1579,7 @@ function setTab(which) {
     if (!standingsData) loadStandings();
     renderPolls();
     loadVotes();
+    loadFixtures().then(() => renderPolls());
   }
 }
 tabMatches.addEventListener('click', () => setTab('matches'));
@@ -2702,11 +2726,10 @@ async function pushPrediction(payload) {
   } catch (e) { /* offline — the localStorage copy holds it until next sync */ }
 }
 
-/* ----- Polls (vote on who wins), stored in the same Google Sheet ----- */
-const POLLS = [
-  { id: 'champion', q: 'Who will win the World Cup 2026?' }
-];
-let votes = store.get('wc26.votes', {});            // { pollId: { voter: teamName } }
+/* ----- Polls — overall winner + per-game "who wins?", stored in the Sheet ----- */
+const CHAMPION_POLL = { id: 'champion', q: 'Who will win the World Cup 2026?' };
+const POLL_GAME_LIMIT = 16;   // how many upcoming fixtures to open polls for
+let votes = store.get('wc26.votes', {});            // { pollId: { voter: choice } }
 let voterName = store.get('wc26.voterName', '');
 if (!votes || typeof votes !== 'object') votes = {};
 
@@ -2742,11 +2765,70 @@ function castVote(poll, voter, choice) {
   renderPolls();
 }
 
+function pollTally(v) {
+  const t = {};
+  Object.values(v).forEach(c => { if (c) t[c] = (t[c] || 0) + 1; });
+  return t;
+}
+function totalLine(v) {
+  const t = Object.values(v).filter(Boolean).length;
+  return '<div class="poll-total">' + t + (t === 1 ? ' vote' : ' votes') + '</div>';
+}
+function barsHtml(tally, myChoice, logoFn) {
+  const total = Object.values(tally).reduce((s, n) => s + n, 0);
+  if (!total) return '<div class="poll-empty">No votes yet — be the first.</div>';
+  const max = Math.max(1, ...Object.values(tally));
+  return Object.keys(tally).sort((a, b) => tally[b] - tally[a] || a.localeCompare(b)).map(name => {
+    const n = tally[name], pct = Math.round(n / total * 100), w = Math.round(n / max * 100);
+    const logo = logoFn ? logoFn(name) : '';
+    return '<div class="poll-bar-row' + (name === myChoice ? ' mine' : '') + '">' +
+      '<span class="poll-bar-team">' + (logo ? '<img src="' + esc(logo) + '" alt="" loading="lazy">' : '') + esc(name) + '</span>' +
+      '<span class="poll-bar-track"><span class="poll-bar-fill" style="width:' + w + '%"></span></span>' +
+      '<span class="poll-bar-n">' + n + ' (' + pct + '%)</span>' +
+    '</div>';
+  }).join('');
+}
+
+/* Upcoming (and in-progress) fixtures become "who wins this game?" polls */
+function gamePolls() {
+  return (awardsEvents || []).filter(e => {
+    const st = e.competitions?.[0]?.status?.type?.state;
+    const cs = e.competitions?.[0]?.competitors || [];
+    const h = cs.find(c => c.homeAway === 'home') || cs[0];
+    const a = cs.find(c => c.homeAway === 'away') || cs[1];
+    return (st === 'pre' || st === 'in') && h?.team?.id && a?.team?.id;
+  }).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, POLL_GAME_LIMIT)
+  .map(ev => {
+    const comp = ev.competitions[0];
+    const cs = comp.competitors;
+    const h = cs.find(c => c.homeAway === 'home') || cs[0];
+    const a = cs.find(c => c.homeAway === 'away') || cs[1];
+    const state = comp.status?.type?.state;
+    const ko = (ev.season?.slug || '') !== 'group-stage';
+    const opts = [{ value: h.team.displayName, label: h.team.shortDisplayName || h.team.displayName, logo: h.team.logo || '' }];
+    if (!ko) opts.push({ value: 'Draw', label: 'Draw', logo: '' });
+    opts.push({ value: a.team.displayName, label: a.team.shortDisplayName || a.team.displayName, logo: a.team.logo || '' });
+    return {
+      id: 'game:' + ev.id,
+      title: h.team.displayName + ' v ' + a.team.displayName,
+      when: fmtDay(ev.date) + ' \u00b7 ' + fmtKickoff(ev.date),
+      options: opts, locked: state !== 'pre'
+    };
+  });
+}
+function gameLockedById(pollId) {
+  const id = pollId.replace(/^game:/, '');
+  const ev = (awardsEvents || []).find(e => String(e.id) === id);
+  const st = ev?.competitions?.[0]?.status?.type?.state;
+  return !!(st && st !== 'pre');
+}
+
 function renderPolls() {
   const wrap = document.getElementById('pollsWrap');
   if (!wrap) return;
   const members = [...new Set(sweeps.Hoogies.map(e => e.member))].sort((a, b) => a.localeCompare(b));
   const teams = teamNameList();
+
   let html =
     '<div class="poll-voter">Voting as ' +
       '<input list="voterNames" id="voterInput" class="poll-name" placeholder="your name" value="' + esc(voterName) + '">' +
@@ -2755,53 +2837,73 @@ function renderPolls() {
                               : '<span class="poll-sync">this device only</span>') +
     '</div>';
 
-  POLLS.forEach(poll => {
-    const v = votes[poll.id] || {};
+  // Overall winner poll (select of all teams), closes at the final
+  {
+    const v = votes[CHAMPION_POLL.id] || {};
     const myChoice = voterName ? v[voterName] : null;
-    const tally = {};
-    Object.values(v).forEach(c => { if (c) tally[c] = (tally[c] || 0) + 1; });
-    const total = Object.values(tally).reduce((s, n) => s + n, 0);
-    const max = Math.max(1, ...Object.values(tally));
-    const sorted = Object.keys(tally).sort((a, b) => tally[b] - tally[a] || a.localeCompare(b));
-
-    const voteRow = teams.length
-      ? '<div class="poll-vote">' +
-          '<select class="poll-pick" data-poll="' + esc(poll.id) + '">' +
-            '<option value="">Pick a team…</option>' +
+    const voteRow = finalLocked()
+      ? '<div class="poll-closed">Voting closed — the final has kicked off.</div>'
+      : (teams.length
+        ? '<div class="poll-vote">' +
+            '<select class="poll-pick" data-poll="' + esc(CHAMPION_POLL.id) + '"><option value="">Pick a team…</option>' +
             teams.map(t => '<option value="' + esc(t.name) + '"' + (myChoice === t.name ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') +
-          '</select>' +
-          '<button class="poll-btn" data-poll="' + esc(poll.id) + '">' + (myChoice ? 'Change vote' : 'Vote') + '</button>' +
-        '</div>'
-      : '<div class="poll-loading">Loading teams…</div>';
-
-    const results = total
-      ? sorted.map(name => {
-          const n = tally[name], pct = Math.round(n / total * 100), w = Math.round(n / max * 100);
-          const logo = nameLogo(name);
-          return '<div class="poll-bar-row' + (name === myChoice ? ' mine' : '') + '">' +
-            '<span class="poll-bar-team">' + (logo ? '<img src="' + esc(logo) + '" alt="" loading="lazy">' : '') + esc(name) + '</span>' +
-            '<span class="poll-bar-track"><span class="poll-bar-fill" style="width:' + w + '%"></span></span>' +
-            '<span class="poll-bar-n">' + n + ' (' + pct + '%)</span>' +
-          '</div>';
-        }).join('')
-      : '<div class="poll-empty">No votes yet — be the first.</div>';
-
+            '</select><button class="poll-btn" data-poll="' + esc(CHAMPION_POLL.id) + '">' + (myChoice ? 'Change vote' : 'Vote') + '</button>' +
+          '</div>'
+        : '<div class="poll-loading">Loading teams…</div>');
     html += '<div class="poll-card">' +
-      '<div class="poll-q">' + esc(poll.q) + '</div>' +
+      '<div class="poll-q">' + esc(CHAMPION_POLL.q) + '</div>' +
       voteRow +
       (myChoice ? '<div class="poll-mychoice">Your pick: <strong>' + esc(myChoice) + '</strong></div>' : '') +
-      '<div class="poll-results">' + results + '</div>' +
-      '<div class="poll-total">' + total + (total === 1 ? ' vote' : ' votes') + '</div>' +
+      '<div class="poll-results">' + barsHtml(pollTally(v), myChoice, nameLogo) + '</div>' +
+      totalLine(v) +
     '</div>';
-  });
+  }
+
+  // Per-game polls
+  const gps = gamePolls();
+  html += '<div class="poll-section">Upcoming games</div>';
+  if (!gps.length) {
+    html += '<div class="poll-empty">' + (awardsEvents ? 'No upcoming fixtures to vote on right now.' : 'Loading fixtures…') + '</div>';
+  } else {
+    gps.forEach(p => {
+      const v = votes[p.id] || {};
+      const myChoice = voterName ? v[voterName] : null;
+      const logoFn = name => { const o = p.options.find(o => o.value === name); return o ? o.logo : nameLogo(name); };
+      const controls = p.locked
+        ? '<div class="poll-closed">Voting closed — game has started.</div>'
+        : '<div class="poll-opts">' + p.options.map(o =>
+            '<button class="poll-opt' + (myChoice === o.value ? ' chosen' : '') + '" data-poll="' + esc(p.id) + '" data-choice="' + esc(o.value) + '">' +
+              (o.logo ? '<img src="' + esc(o.logo) + '" alt="" loading="lazy">' : '') + esc(o.label) +
+            '</button>').join('') + '</div>';
+      html += '<div class="poll-card">' +
+        '<div class="poll-q">' + esc(p.title) + '</div>' +
+        '<div class="poll-when">' + esc(p.when) + '</div>' +
+        controls +
+        (myChoice ? '<div class="poll-mychoice">Your pick: <strong>' + esc(myChoice) + '</strong></div>' : '') +
+        '<div class="poll-results">' + barsHtml(pollTally(v), myChoice, logoFn) + '</div>' +
+        totalLine(v) +
+      '</div>';
+    });
+  }
   wrap.innerHTML = html;
 }
 
 const pollsWrapEl = document.getElementById('pollsWrap');
 pollsWrapEl.addEventListener('click', (e) => {
+  const opt = e.target.closest('.poll-opt');
+  if (opt) {
+    if (gameLockedById(opt.dataset.poll)) return;   // game already kicked off
+    const vi = document.getElementById('voterInput');
+    const voter = (vi ? vi.value.trim() : voterName);
+    if (!voter) { if (vi) vi.focus(); return; }
+    voterName = voter; store.set('wc26.voterName', voterName);
+    castVote(opt.dataset.poll, voter, opt.dataset.choice);
+    return;
+  }
   const btn = e.target.closest('.poll-btn');
   if (!btn) return;
   const poll = btn.dataset.poll;
+  if (poll === 'champion' && finalLocked()) return;   // voting closed at the final
   const vi = document.getElementById('voterInput');
   const voter = (vi ? vi.value.trim() : voterName);
   if (!voter) { if (vi) vi.focus(); return; }
@@ -2817,7 +2919,7 @@ pollsWrapEl.addEventListener('change', (e) => {
   if (!vi) return;
   voterName = vi.value.trim();
   store.set('wc26.voterName', voterName);
-  renderPolls();   // reflect this voter's existing pick
+  renderPolls();   // reflect this voter's existing picks
 });
 
 function finalFixture() {
@@ -2840,6 +2942,12 @@ function finalActual() {
   const a = finalPreds.actualA != null ? finalPreds.actualA : f.as;
   if (h == null || a == null) return null;
   return { h: Number(h), a: Number(a) };
+}
+/* Once the final has kicked off (or finished) the winner is effectively being
+   decided, so champion-poll votes and final-score tips are locked. */
+function finalLocked() {
+  const f = finalFixture();
+  return !!(f && (f.state === 'in' || f.state === 'post'));
 }
 /* Registrants who hold a Shared finalist team — they're the ones who tip */
 function sharedFinalRegistrants() {
@@ -2893,12 +3001,14 @@ function renderFinalPredictions() {
   const actA = finalPreds.actualA != null ? finalPreds.actualA : (f.as != null ? f.as : '');
   const autoNote = (f.state === 'post' && finalPreds.actualH == null && finalPreds.actualA == null)
     ? ' <span class="pred-auto">(from result — edit if it went to extra time)</span>' : '';
+  const locked = finalLocked();
   el.innerHTML =
     '<div class="pred-panel">' +
       '<div class="pred-title">Final score predictions</div>' +
       '<div class="pred-sub">' + esc(hName) + ' vs ' + esc(aName) + ' — ' + fmtDay(f.date) +
         '. Shared-Team finalists are won by whichever registrant tips the exact 90-minute score; if neither does, the prize is split. Enter predictions before kickoff. ' +
         (PREDICTIONS_WEBAPP_URL ? '<span class="pred-auto">Shared live via Google Sheet.</span>' : '<span class="pred-auto">Saved on this device only.</span>') + '</div>' +
+      (locked ? '<div class="poll-closed">Tips locked — the final has kicked off.</div>' : '') +
       '<div class="pred-actual">Actual 90\u2019 score: ' +
         '<input type="number" min="0" class="pred-in" data-k="actualH" value="' + esc(actH) + '"> \u2013 ' +
         '<input type="number" min="0" class="pred-in" data-k="actualA" value="' + esc(actA) + '">' + autoNote +
@@ -2911,8 +3021,8 @@ function renderFinalPredictions() {
         return '<div class="pred-row">' +
           '<span class="pred-name">' + esc(r.member) +
             ' <span class="pred-team">' + esc(r.teamName) + ' ' + (r.role === 'dud' ? 'Sh*t' : 'Golden') + '</span></span>' +
-          '<input type="number" min="0" class="pred-in" data-pred="' + esc(r.member) + '" data-side="h" value="' + esc(p.h ?? '') + '"> \u2013 ' +
-          '<input type="number" min="0" class="pred-in" data-pred="' + esc(r.member) + '" data-side="a" value="' + esc(p.a ?? '') + '">' +
+          '<input type="number" min="0" class="pred-in" data-pred="' + esc(r.member) + '" data-side="h" value="' + esc(p.h ?? '') + '"' + (locked ? ' disabled' : '') + '> \u2013 ' +
+          '<input type="number" min="0" class="pred-in" data-pred="' + esc(r.member) + '" data-side="a" value="' + esc(p.a ?? '') + '"' + (locked ? ' disabled' : '') + '>' +
           (correct ? ' <span class="pred-correct">\u2713 correct</span>' : '') +
         '</div>';
       }).join('') + '</div>' +
@@ -2927,6 +3037,7 @@ function onPredInput(e) {
     finalPreds[inp.dataset.k] = v;
     pushPrediction({ type: 'actual', h: finalPreds.actualH, a: finalPreds.actualA });
   } else if (inp.dataset.pred) {
+    if (finalLocked()) return;   // tips close at kickoff
     const m = inp.dataset.pred;
     finalPreds.preds[m] = finalPreds.preds[m] || {};
     finalPreds.preds[m][inp.dataset.side] = v;
@@ -3159,26 +3270,35 @@ async function scanSummaries() {
   renderAwards();
 }
 
-async function loadAwards() {
-  renderAwards();
-  loadPredictions();
-  if (awardsEvents) { renderAwards(); renderFinalPredictions(); scanSummaries(); return; }
-  try {
-    const merged = {};
-    for (const range of ['20260611-20260628', '20260628-20260720']) {
+/* Fetch every tournament fixture once (group + knockout); shared by Awards and Polls */
+async function loadFixtures() {
+  if (awardsEvents) return awardsEvents;
+  const merged = {};
+  for (const range of ['20260611-20260628', '20260628-20260720']) {
+    try {
       const res = await fetch(BASE_URL + '?dates=' + range + '&limit=500');
       if (!res.ok) continue;
       const d = await res.json();
       (d.events || []).forEach(ev => { merged[ev.id] = ev; });
-    }
-    awardsEvents = Object.values(merged);
-    renderAwards();
-    renderFinalPredictions();
-    scanSummaries();
-  } catch (err) {
-    document.getElementById('awardsWrap').innerHTML =
-      '<div class="error-box">Could not load awards data (' + esc(err.message) + ').</div>';
+    } catch (e) { /* try the other range */ }
   }
+  awardsEvents = Object.values(merged);
+  return awardsEvents;
+}
+
+async function loadAwards() {
+  renderAwards();
+  loadPredictions();
+  if (!awardsEvents) await loadFixtures();
+  if (!awardsEvents.length) {
+    document.getElementById('awardsWrap').innerHTML =
+      '<div class="error-box">Could not load awards data. It will retry when you reopen this tab.</div>';
+    awardsEvents = null;   // allow a retry next open
+    return;
+  }
+  renderAwards();
+  renderFinalPredictions();
+  scanSummaries();
 }
 document.getElementById('predPanel').addEventListener('input', onPredInput);
 
