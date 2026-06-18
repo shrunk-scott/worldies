@@ -358,6 +358,10 @@
   .group-team img { width: 17px; height: 17px; object-fit: contain; flex-shrink: 0; }
   .group-team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .group-table .pts { font-weight: 600; color: var(--text); }
+  .team-rank {
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+    margin-left: 5px; opacity: 0.85; font-weight: 600;
+  }
   .group-table tr.q td { background: rgba(47,191,113,0.06); }
 
   /* Sweeps */
@@ -1091,6 +1095,7 @@ function teamRowHtml(c, state) {
     logo +
     '<span class="team-line">' +
       '<span class="team-name">' + esc(t.displayName || t.name || '?') + '</span>' +
+      rankBadge(t.id) +
       sweepTagsFor(t.id).map(tag => {
         const dud = tag.role === 'dud';
         const lbl = roleLabel(tag.league, tag.role).toLowerCase();
@@ -1260,14 +1265,21 @@ async function loadDetails(eventId) {
     const rows = events
       .filter(e => {
         const t = (e.type?.text || '').toLowerCase();
-        return t.includes('goal') || t.includes('card') || t.includes('penalty');
+        return e.scoringPlay === true || e.redCard === true || e.yellowCard === true ||
+          t.includes('goal') || t.includes('card') || t.includes('penalty');
       })
       .map(e => {
         const t = (e.type?.text || '').toLowerCase();
-        let icon = ICON.ball;                                          // goal
-        if (t.includes('yellow')) icon = '<span class="card-yellow"></span>';
-        else if (t.includes('red')) icon = '<span class="card-red"></span>';
-        else if (t.includes('own')) icon = ICON.ball + ' <span style="color:var(--muted);font-size:11px">OG</span>';
+        const own = t.includes('own');
+        // A scoring play is a goal even if other text is present; only treat as a
+        // card when ESPN's card flag (or unambiguous card text) says so.
+        const isGoal = e.scoringPlay === true || (e.scoringPlay == null && t.includes('goal'));
+        const isRed = !isGoal && (e.redCard === true || (e.redCard == null && t.includes('red')));
+        const isYellow = !isGoal && !isRed && (e.yellowCard === true || t.includes('yellow') || t.includes('card'));
+        let icon = ICON.ball;                                          // goal (default)
+        if (isGoal) icon = own ? ICON.ball + ' <span style="color:var(--muted);font-size:11px">OG</span>' : ICON.ball;
+        else if (isRed) icon = '<span class="card-red"></span>';
+        else if (isYellow) icon = '<span class="card-yellow"></span>';
         const who = (e.participants || []).map(p => p.athlete?.displayName).filter(Boolean).join(', ');
         const clock = e.clock?.displayValue || '';
         const teamAbbr = e.team?.abbreviation || e.team?.displayName || '';
@@ -1598,6 +1610,22 @@ function statVal(entry, names) {
   }
   return '';
 }
+function statNum(entry, names) {
+  const v = parseFloat(statVal(entry, names));
+  return isNaN(v) ? null : v;
+}
+/* Sort a group's entries into ladder order (1st to last). Prefers ESPN's own
+   rank if present, else points, then goal difference, goals for, then wins. */
+function ladderSort(entries) {
+  return entries.slice().sort((a, b) => {
+    const ra = statNum(a, ['rank']), rb = statNum(b, ['rank']);
+    if (ra != null && rb != null && ra !== rb) return ra - rb;
+    return ((statNum(b, ['points', 'PTS', 'P']) ?? -99) - (statNum(a, ['points', 'PTS', 'P']) ?? -99)) ||
+           ((statNum(b, ['pointDifferential', 'GD']) ?? -99) - (statNum(a, ['pointDifferential', 'GD']) ?? -99)) ||
+           ((statNum(b, ['pointsFor', 'GF', 'goalsFor']) ?? -99) - (statNum(a, ['pointsFor', 'GF', 'goalsFor']) ?? -99)) ||
+           ((statNum(b, ['wins', 'W']) ?? -99) - (statNum(a, ['wins', 'W']) ?? -99));
+  });
+}
 
 function renderGroups() {
   if (!standingsData) return;
@@ -1607,7 +1635,7 @@ function renderGroups() {
     return;
   }
   groupsGrid.innerHTML = groups.map(g => {
-    const entries = (g.standings?.entries || []);
+    const entries = ladderSort(g.standings?.entries || []);
     const rows = entries.map((en, i) => {
       const t = en.team || {};
       const faved = favourites[t.id] ? ' style="color:var(--gold)"' : '';
@@ -1615,6 +1643,7 @@ function renderGroups() {
         '<td><span class="group-team">' +
           (t.logos?.[0]?.href ? '<img src="' + esc(t.logos[0].href) + '" alt="" loading="lazy">' : '') +
           '<span' + faved + '>' + esc(t.displayName || t.name || '?') + '</span>' +
+          rankBadge(t.id) +
         '</span></td>' +
         '<td>' + esc(statVal(en, ['gamesPlayed', 'GP'])) + '</td>' +
         '<td>' + esc(statVal(en, ['wins', 'W'])) + '</td>' +
@@ -2565,20 +2594,29 @@ function rankOf(teamId) {
       Object.keys(teamIndex).length) buildRankIndex();
   return (FIFA_RANK_BY_ID && FIFA_RANK_BY_ID[teamId]) || 999;
 }
+/* Small "#N" world-ranking badge; empty when the rank is unknown. */
+function rankBadge(teamId) {
+  const r = rankOf(teamId);
+  return r && r < 999 ? '<span class="team-rank" title="FIFA world ranking">#' + r + '</span>' : '';
+}
 
 /* Per-capita greenhouse emissions (t CO2e), approx., Our World in Data — the
    charter's final Shared Team tie-break (lowest wins). Keyed by team id. */
+/* Per-capita greenhouse-gas emissions, tonnes CO2e/person, 2024, incl. land use.
+   Source: Jones et al. (2025) via Our World in Data — the series the charter cites
+   (ourworldindata.org/grapher/per-capita-ghg-emissions). England and Scotland use
+   the United Kingdom figure (OWID reports the UK, not the home nations). */
 const GHG_CANON = {
-  'France': 6, 'Spain': 7, 'Argentina': 8, 'England': 7, 'Portugal': 6, 'Brazil': 9,
-  'Netherlands': 11, 'Morocco': 3, 'Belgium': 10, 'Germany': 10, 'Croatia': 7,
-  'Colombia': 6, 'Senegal': 2, 'Mexico': 6, 'USA': 18, 'Uruguay': 12, 'Japan': 9,
-  'Switzerland': 6, 'Iran': 9, 'Türkiye': 6, 'Ecuador': 6, 'Austria': 9,
-  'South Korea': 14, 'Australia': 21, 'Algeria': 7, 'Egypt': 5, 'Canada': 19,
-  'Norway': 8, 'Panama': 6, 'Ivory Coast': 2, 'Sweden': 5, 'Paraguay': 15,
-  'Czechia': 12, 'Scotland': 7, 'Tunisia': 4, 'DR Congo': 3, 'Uzbekistan': 7,
-  'Qatar': 35, 'Iraq': 8, 'South Africa': 9, 'Saudi Arabia': 22, 'Jordan': 5,
-  'Bosnia and Herzegovina': 8, 'Cape Verde': 1, 'Ghana': 2, 'Curaçao': 10,
-  'Haiti': 0.6, 'New Zealand': 17
+  'France': 5.34, 'Spain': 5.74, 'Argentina': 9.12, 'England': 5.64, 'Portugal': 5.20, 'Brazil': 13.23,
+  'Netherlands': 8.07, 'Morocco': 2.67, 'Belgium': 9.20, 'Germany': 7.80, 'Croatia': 5.79,
+  'Colombia': 4.70, 'Senegal': 1.91, 'Mexico': 4.86, 'USA': 17.53, 'Uruguay': 12.71, 'Japan': 8.14,
+  'Switzerland': 4.50, 'Iran': 11.05, 'Türkiye': 7.77, 'Ecuador': 3.48, 'Austria': 7.48,
+  'South Korea': 12.19, 'Australia': 22.83, 'Algeria': 5.90, 'Egypt': 2.85, 'Canada': 20.20,
+  'Norway': 10.08, 'Panama': 4.68, 'Ivory Coast': 4.41, 'Sweden': 5.37, 'Paraguay': 9.55,
+  'Czechia': 7.87, 'Scotland': 5.64, 'Tunisia': 3.55, 'DR Congo': 6.23, 'Uzbekistan': 5.72,
+  'Qatar': 48.95, 'Iraq': 8.65, 'South Africa': 8.48, 'Saudi Arabia': 24.20, 'Jordan': 2.69,
+  'Bosnia and Herzegovina': 8.37, 'Cape Verde': 1.61, 'Ghana': 1.51, 'Curaçao': 8.00,
+  'Haiti': 1.01, 'New Zealand': 15.71
 };
 let GHG_BY_ID = null;
 function buildGhg() {
@@ -2646,6 +2684,16 @@ function teamCumulativeUpTo(dateIso) {
   return stats;
 }
 
+/* Total per-capita GHG across all the teams a registrant holds. The charter's
+   final tie-break: when two registrants are level, the one whose countries carry
+   the HIGHEST combined emissions is eliminated (lowest wins). */
+function memberTeamsGhgTotal(member) {
+  const ids = [...new Set(sweeps.Hoogies.filter(e => e.member === member).map(e => e.teamId))];
+  let sum = 0, any = false;
+  ids.forEach(id => { const g = ghgOf(id); if (g != null) { sum += g; any = true; } });
+  return any ? Math.round(sum * 100) / 100 : null;
+}
+
 /* Resolve which registrant(s) collect for a winning team, applying the
    Shared Team tie-break. Returns [{member, role, won, note}]. */
 function resolveAward(teamId, key, conferDate) {
@@ -2666,21 +2714,22 @@ function resolveAward(teamId, key, conferDate) {
       otherName: other ? (teamIndex[other]?.name || '') : '',
       gd: s ? (s.gf - s.ga) : null,
       gf: s ? s.gf : null,
-      ghg: other ? ghgOf(other) : null
+      total: memberTeamsGhgTotal(h.member)   // emissions tie-break: highest is eliminated
     };
   });
   const ranked = scored.slice().sort((a, b) =>
     ((b.gd ?? -99) - (a.gd ?? -99)) ||
     ((b.gf ?? -99) - (a.gf ?? -99)) ||
-    ((a.ghg ?? Infinity) - (b.ghg ?? Infinity)));
+    ((a.total ?? Infinity) - (b.total ?? Infinity)));   // lowest combined emissions wins
   const top = ranked[0];
   const fullTie = ranked.length > 1 &&
-    ranked[0].gd === ranked[1].gd && ranked[0].gf === ranked[1].gf && ranked[0].ghg === ranked[1].ghg;
+    ranked[0].gd === ranked[1].gd && ranked[0].gf === ranked[1].gf && ranked[0].total === ranked[1].total;
   return scored.map(h => ({
     member: h.member, role: h.role,
     won: fullTie ? true : (h.member === top.member),
     note: 'Shared — 2nd team ' + (h.otherName || '?') + ': GD ' +
-      (h.gd ?? '?') + ', GF ' + (h.gf ?? '?') + (h.ghg != null ? ', GHG ' + h.ghg : '')
+      (h.gd ?? '?') + ', GF ' + (h.gf ?? '?') +
+      (h.total != null ? ', teams\u2019 emissions ' + h.total.toFixed(2) + 't' : '')
   }));
 }
 function withResolved(groups, key) {
@@ -3208,13 +3257,56 @@ function regChip(r) {
     esc(r.member) + lbl + ' — loses tie-break</span>';
 }
 
+/* Manually entered award winners from the Google Sheet "Awards" tab. Keyed by a
+   normalised award name so it matches either the award key or its title. When an
+   award has manual winners they override the auto-computed result. */
+let awardOverrides = store.get('wc26.awardOverrides', {});
+if (!awardOverrides || typeof awardOverrides !== 'object') awardOverrides = {};
+function awNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+async function loadManualAwards() {
+  if (!PREDICTIONS_WEBAPP_URL) return;
+  try {
+    const res = await fetch(PREDICTIONS_WEBAPP_URL + (PREDICTIONS_WEBAPP_URL.includes('?') ? '&' : '?') + 'action=awards', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    if (Array.isArray(rows)) {
+      const map = {};
+      rows.forEach((r, i) => {
+        if (!r || !r.award) return;
+        map[awNorm(r.award)] = { award: r.award, winners: r.winners || '', detail: r.detail || '', order: i };
+      });
+      awardOverrides = map;
+      store.set('wc26.awardOverrides', awardOverrides);
+      renderAwards();
+    }
+  } catch (e) { /* keep the cached copy */ }
+}
+function overrideFor(aw) {
+  return awardOverrides[awNorm(aw.key)] || awardOverrides[awNorm(aw.title)] || null;
+}
+function winnerChips(text) {
+  return String(text).split(/[;\n]+/).map(s => s.trim()).filter(Boolean)
+    .map(s => '<span class="aw-chip">' + esc(s) + '</span>').join('');
+}
+
 function renderAwards() {
   const wrap = document.getElementById('awardsWrap');
   if (!awardsEvents) { wrap.innerHTML = '<div class="empty">Loading match results…</div>'; return; }
   const awards = computeAwards();
-  wrap.innerHTML = awards.map(aw => {
-    let body;
-    if (aw.awarded) {
+  const usedOverrides = new Set();
+  let html = awards.map(aw => {
+    const ov = overrideFor(aw);
+    const manual = ov && ov.winners.trim();
+    let body, awarded, badge;
+    if (manual) {
+      usedOverrides.add(awNorm(ov.award));
+      awarded = true;
+      badge = '<span class="aw-badge">Awarded</span>';
+      body = (ov.detail ? '<div class="aw-detail">' + esc(ov.detail) + '</div>' : '') +
+        '<div class="aw-team">' + winnerChips(ov.winners) + '</div>';
+    } else if (aw.awarded) {
+      awarded = true;
+      badge = aw.preliminary ? '<span class="aw-badge prelim">Leading</span>' : '<span class="aw-badge">Awarded</span>';
       const teamsHtml = (aw.groups || []).map(g => {
         const chips = g.regs.length
           ? g.regs.map(regChip).join('')
@@ -3222,23 +3314,33 @@ function renderAwards() {
         return '<div class="aw-team"><span class="aw-team-name">' + esc(g.teamName) + '</span>' + chips + '</div>';
       }).join('');
       body = (aw.preliminary ? '<div class="aw-prelim-note">' + esc(aw.prelimNote || 'Preliminary — can still change.') + '</div>' : '') +
-        '<div class="aw-detail">' + esc(aw.detail || '') + '</div>' +
-        (teamsHtml || (aw.special ? '' : ''));
+        '<div class="aw-detail">' + esc(aw.detail || '') + '</div>' + teamsHtml;
     } else if (aw.scanning) {
+      awarded = false; badge = '';
       body = '<div class="aw-status scanning">Checking match events…</div>';
     } else {
+      awarded = false; badge = '';
       body = '<div class="aw-status">Not yet awarded</div>';
     }
-    return '<div class="aw-card' + (aw.awarded ? ' won' : '') + '">' +
-      '<div class="aw-head"><span class="aw-title">' + esc(aw.title) + '</span>' +
-        (aw.awarded ? (aw.preliminary
-          ? '<span class="aw-badge prelim">Leading</span>'
-          : '<span class="aw-badge">Awarded</span>') : '') +
-      '</div>' +
+    return '<div class="aw-card' + (awarded ? ' won' : '') + '">' +
+      '<div class="aw-head"><span class="aw-title">' + esc(aw.title) + '</span>' + badge + '</div>' +
       '<div class="aw-rule">' + esc(aw.rule) + '</div>' +
       body +
     '</div>';
   }).join('');
+
+  // Any manual award rows that didn't match a known award become their own cards.
+  const extras = Object.values(awardOverrides)
+    .filter(ov => ov.winners.trim() && !usedOverrides.has(awNorm(ov.award)))
+    .sort((a, b) => a.order - b.order);
+  html += extras.map(ov =>
+    '<div class="aw-card won">' +
+      '<div class="aw-head"><span class="aw-title">' + esc(ov.award) + '</span><span class="aw-badge">Awarded</span></div>' +
+      (ov.detail ? '<div class="aw-detail">' + esc(ov.detail) + '</div>' : '') +
+      '<div class="aw-team">' + winnerChips(ov.winners) + '</div>' +
+    '</div>').join('');
+
+  wrap.innerHTML = html;
 }
 
 async function scanSummaries() {
@@ -3289,6 +3391,7 @@ async function loadFixtures() {
 async function loadAwards() {
   renderAwards();
   loadPredictions();
+  loadManualAwards();
   if (!awardsEvents) await loadFixtures();
   if (!awardsEvents.length) {
     document.getElementById('awardsWrap').innerHTML =
