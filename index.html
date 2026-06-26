@@ -501,6 +501,20 @@
   .b-half-label.b-top::before { background: var(--pitch); }
   .b-half-label.b-bot::before { background: var(--gold); }
   .bracket-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .bracket-scroll { scrollbar-width: thin; scrollbar-color: var(--pitch) rgba(255,255,255,0.05); }
+  .bracket-scroll::-webkit-scrollbar { height: 9px; }
+  .bracket-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 8px; }
+  .bracket-scroll::-webkit-scrollbar-thumb { background: var(--pitch); border-radius: 8px; }
+  .bracket-scroll::-webkit-scrollbar-thumb:hover { background: #45d684; }
+  /* Subtle green scrollbar app-wide */
+  html { scrollbar-width: thin; scrollbar-color: var(--pitch) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--pitch); border-radius: 8px;
+    border: 2px solid transparent; background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #45d684; background-clip: padding-box; }
   .b-grid4 {
     display: grid; grid-template-columns: repeat(4, minmax(116px, 1fr));
     gap: 28px; min-width: 540px; align-items: start; --bslot: 104px;
@@ -511,6 +525,11 @@
     padding: 14px 12px; text-align: center;
   }
   .b-final-band .b-half-label.b-fin { color: var(--gold); text-align: center; margin-bottom: 12px; }
+  .b-trophy3d {
+    width: 104px; height: 128px; margin: 0 auto 4px;
+    filter: drop-shadow(0 3px 8px rgba(47,191,113,0.30));
+  }
+  .b-trophy3d-canvas { display: block; width: 104px; height: 128px; }
   .b-final-cell { max-width: 300px; margin: 0 auto; }
   .b-third { max-width: 300px; margin: 16px auto 0; }
   .b-third-label {
@@ -2254,6 +2273,71 @@ function bColHtml(label, events, extraClass) {
   '</div>';
 }
 
+/* Miniature spinning trophy for the Final, rendered from trophy.glb (the same
+   model as the background). A singleton renderer whose canvas is re-mounted on
+   each bracket render; falls back to a procedural gold trophy if the GLB fails. */
+let miniTrophy = null;
+function initMiniTrophy() {
+  if (miniTrophy || typeof THREE === 'undefined') return;
+  const W = 104, H = 128;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'b-trophy3d-canvas';
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 100);
+  camera.position.set(0, 0, 13);
+  scene.add(new THREE.AmbientLight(0xcfd8e3, 0.85));
+  const key = new THREE.DirectionalLight(0xfff3dc, 1.6); key.position.set(3, 6, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x2fbf71, 0.5); rim.position.set(-4, -2, -3); scene.add(rim);
+  const holder = new THREE.Group(); scene.add(holder);
+  miniTrophy = { renderer, scene, camera, canvas, holder };
+
+  const frame = (obj) => {
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    const scale = 7 / Math.max(size.y, 0.0001);
+    obj.scale.setScalar(scale);
+    obj.position.sub(centre.multiplyScalar(scale));
+    holder.add(obj);
+  };
+  const procedural = () => {
+    const gold = new THREE.MeshPhongMaterial({ color: 0xd9b24a, specular: 0xfff2c4, shininess: 80 });
+    const g = new THREE.Group();
+    const pts = [[1.05,0],[1.05,0.22],[0.78,0.3],[0.62,0.55],[0.3,0.75],[0.2,1.1],
+      [0.26,1.7],[0.2,2.3],[0.34,2.75],[0.72,3.1],[0.92,3.5],[0.96,3.9],[0.88,4.0]]
+      .map(p => new THREE.Vector2(p[0], p[1]));
+    g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 40), gold));
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 18), gold);
+    orb.position.y = 4.3; g.add(orb);
+    frame(g);
+  };
+  const tryLoad = (urls) => {
+    if (!urls.length || !THREE.GLTFLoader) { procedural(); return; }
+    new THREE.GLTFLoader().load(urls[0], gltf => frame(gltf.scene), undefined,
+      () => tryLoad(urls.slice(1)));
+  };
+  tryLoad(['trophy.glb', 'https://raw.githubusercontent.com/shrunk-scott/worldies/main/trophy.glb']);
+
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function animate() {
+    miniTrophy.raf = requestAnimationFrame(animate);
+    if (!canvas.isConnected) return;               // skip GPU work when off-screen
+    if (!reduce) holder.rotation.y += 0.012;
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+function mountMiniTrophy() {
+  initMiniTrophy();
+  const mount = document.getElementById('trophyMount');
+  if (mount && miniTrophy && miniTrophy.canvas && miniTrophy.canvas.parentNode !== mount) {
+    mount.appendChild(miniTrophy.canvas);
+  }
+}
+
 function renderBracket() {
   const wrap = document.getElementById('bracketWrap');
   if (!koEvents) return;   // nothing fetched yet
@@ -2311,17 +2395,21 @@ function renderBracket() {
     '</div>';
   };
 
+  const trophy = '<div id="trophyMount" class="b-trophy3d" aria-hidden="true"></div>';
+
   wrap.innerHTML =
     '<div class="bracket-halves">' +
-      halfBlock('top', 'Top half', 'b-top', half(R32.slice(0, 8), R16.slice(0, 4), QF.slice(0, 2), [SF[0]])) +
-      halfBlock('bottom', 'Bottom half', 'b-bot', half(R32.slice(8, 16), R16.slice(4, 8), QF.slice(2, 4), [SF[1]])) +
       '<div class="b-final-band">' +
+        trophy +
         '<div class="b-half-label b-fin">Final</div>' +
         '<div class="b-final-cell">' + bCellHtml(FIN[0]) + '</div>' +
         winnerHtml + thirdHtml +
       '</div>' +
+      halfBlock('top', 'Top half', 'b-top', half(R32.slice(0, 8), R16.slice(0, 4), QF.slice(0, 2), [SF[0]])) +
+      halfBlock('bottom', 'Bottom half', 'b-bot', half(R32.slice(8, 16), R16.slice(4, 8), QF.slice(2, 4), [SF[1]])) +
     '</div>' +
     '<div class="bracket-note">Top half and bottom half each run left to right to a semi-final; the two winners meet in the final. Tap a half to expand it. Pairings fill in as the draw is confirmed — Round of 32 kicks off 28 June.</div>';
+  mountMiniTrophy();
 }
 
 function sweepPoints(en) {
