@@ -480,11 +480,34 @@
 
   /* Bracket */
   .bracket-wrap { margin-top: 18px; }
-  .bracket {
-    display: grid;
-    grid-template-columns: 1.25fr 1fr 1fr 1fr 1.15fr;
-    gap: 8px;
-    width: 100%;
+  .bracket-halves { display: flex; flex-direction: column; gap: 16px; }
+  .b-half-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px; padding-left: 2px;
+  }
+  .b-half-label.b-top::before, .b-half-label.b-bot::before {
+    content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+  }
+  .b-half-label.b-top::before { background: var(--pitch); }
+  .b-half-label.b-bot::before { background: var(--gold); }
+  .bracket-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .b-grid4 {
+    display: grid; grid-template-columns: repeat(4, minmax(116px, 1fr));
+    gap: 8px; min-width: 500px; align-items: stretch;
+  }
+  .b-final-band {
+    border: 1px solid rgba(232,184,75,0.35); border-radius: 12px;
+    background: linear-gradient(180deg, rgba(232,184,75,0.07), rgba(232,184,75,0));
+    padding: 14px 12px; text-align: center;
+  }
+  .b-final-band .b-half-label.b-fin { color: var(--gold); text-align: center; margin-bottom: 12px; }
+  .b-final-cell { max-width: 300px; margin: 0 auto; }
+  .b-third { max-width: 300px; margin: 16px auto 0; }
+  .b-third-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
   }
   .b-col { display: flex; flex-direction: column; min-width: 0; }
   .b-round-label {
@@ -546,7 +569,7 @@
     .b-flag, .b-flag-tbd { width: 17px; height: 17px; }
     .b-cell { padding: 4px 5px; }
     .b-chip { font-size: 8px; }
-    .bracket { gap: 5px; }
+    .b-grid4 { gap: 5px; min-width: 460px; }
   }
 
   /* Awards */
@@ -2186,12 +2209,13 @@ function bColHtml(label, events, extraClass) {
 function renderBracket() {
   const wrap = document.getElementById('bracketWrap');
   if (!koEvents) return;   // nothing fetched yet
-  const evs = koEvents;
-  const bySlug = slug => evs
+  // Bracket position order: event id ascending tracks the match number (and thus
+  // the top-to-bottom bracket slot) far better than kickoff date.
+  const ordKey = e => Number(e.id) || 0;
+  const bySlug = slug => koEvents
     .filter(e => (e.season?.slug || '') === slug)
-    .sort((a, b) => new Date(a.date) - new Date(b.date) || (a.id > b.id ? 1 : -1));
+    .sort((a, b) => ordKey(a) - ordKey(b) || (new Date(a.date) - new Date(b.date)));
 
-  // Pad each round to its full size with TBD cells
   function pad(arr, n) {
     const out = arr.slice(0, n);
     while (out.length < n) out.push(null);
@@ -2202,6 +2226,15 @@ function renderBracket() {
   const QF = pad(bySlug('quarterfinals'), 4);
   const SF = pad(bySlug('semifinals'), 2);
   const FIN = pad(bySlug('final'), 1);
+  const TP = bySlug('third-place-match')[0] || null;
+
+  const half = (r32, r16, qf, sf) =>
+    '<div class="bracket-scroll"><div class="b-grid4">' +
+      bColHtml('Round of 32', r32) +
+      bColHtml('Round of 16', r16) +
+      bColHtml('Quarter-finals', qf) +
+      bColHtml('Semi-final', sf) +
+    '</div></div>';
 
   let winnerHtml = '';
   if (champion && teamIndex[champion]) {
@@ -2215,20 +2248,27 @@ function renderBracket() {
     '</div>';
   }
 
-  const finalCol = '<div class="b-col">' +
-    '<div class="b-round-label">Final</div>' +
-    '<div class="b-cells">' + FIN.map(bCellHtml).join('') + winnerHtml + '</div>' +
-  '</div>';
+  const thirdHtml = TP
+    ? '<div class="b-third"><div class="b-third-label">Third-place play-off</div>' + bCellHtml(TP) + '</div>'
+    : '';
 
   wrap.innerHTML =
-    '<div class="bracket">' +
-      bColHtml('Round of 32', R32) +
-      bColHtml('R16', R16) +
-      bColHtml('QF', QF) +
-      bColHtml('SF', SF) +
-      finalCol +
+    '<div class="bracket-halves">' +
+      '<div class="b-half">' +
+        '<div class="b-half-label b-top">Top half</div>' +
+        half(R32.slice(0, 8), R16.slice(0, 4), QF.slice(0, 2), [SF[0]]) +
+      '</div>' +
+      '<div class="b-final-band">' +
+        '<div class="b-half-label b-fin">Final</div>' +
+        '<div class="b-final-cell">' + bCellHtml(FIN[0]) + '</div>' +
+        winnerHtml + thirdHtml +
+      '</div>' +
+      '<div class="b-half">' +
+        '<div class="b-half-label b-bot">Bottom half</div>' +
+        half(R32.slice(8, 16), R16.slice(4, 8), QF.slice(2, 4), [SF[1]]) +
+      '</div>' +
     '</div>' +
-    '<div class="bracket-note">Slots fill in as the knockout draw is decided — Round of 32 kicks off 28 June.</div>';
+    '<div class="bracket-note">The top and bottom halves meet in the final. Each round runs left to right, with two matches feeding the next. Pairings fill in as the draw is confirmed and games are played — Round of 32 kicks off 28 June.</div>';
 }
 
 function sweepPoints(en) {
