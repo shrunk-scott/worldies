@@ -486,6 +486,14 @@
     font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--muted); margin-bottom: 8px; padding-left: 2px;
   }
+  .b-half-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background: none; border: none; cursor: pointer; padding: 0 2px; color: inherit;
+    font: inherit; letter-spacing: inherit; text-transform: inherit;
+  }
+  .b-half-toggle:hover { color: var(--text); }
+  .b-half-caret { color: var(--pitch); font-size: 11px; letter-spacing: 0.08em; }
+  .b-half.collapsed .bracket-scroll { display: none; }
   .b-half-label.b-top::before, .b-half-label.b-bot::before {
     content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
     margin-right: 8px; vertical-align: middle;
@@ -495,7 +503,7 @@
   .bracket-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
   .b-grid4 {
     display: grid; grid-template-columns: repeat(4, minmax(116px, 1fr));
-    gap: 8px; min-width: 500px; align-items: stretch;
+    gap: 28px; min-width: 540px; align-items: start; --bslot: 104px;
   }
   .b-final-band {
     border: 1px solid rgba(232,184,75,0.35); border-radius: 12px;
@@ -516,7 +524,35 @@
     color: var(--muted); text-align: center; margin-bottom: 10px; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
   }
-  .b-cells { display: flex; flex-direction: column; justify-content: space-around; flex: 1; gap: 6px; }
+  .b-cells { display: flex; flex-direction: column; }
+  .b-slot {
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  /* Fixed per-round slot heights: each round's slot is twice the previous, so a
+     match sits exactly on the midpoint between the two that feed it, regardless
+     of how tall the cell content (sweep chips) happens to be. */
+  .b-col.b-r0 .b-slot { height: var(--bslot); }
+  .b-col.b-r1 .b-slot { height: calc(var(--bslot) * 2); }
+  .b-col.b-r2 .b-slot { height: calc(var(--bslot) * 4); }
+  .b-col.b-r3 .b-slot { height: calc(var(--bslot) * 8); }
+  .b-slot .b-cell { width: 100%; }
+  /* Connector lines. Each match links to the next round with an elbow that meets
+     its sibling at the exact vertical midpoint between the two feeding matches. */
+  .b-col:not(:last-child) .b-slot:nth-child(odd)::after {
+    content: ''; position: absolute; left: 100%; top: 50%; width: 14px; height: 50%;
+    border-top: 2px solid var(--line); border-right: 2px solid var(--line);
+    pointer-events: none;
+  }
+  .b-col:not(:last-child) .b-slot:nth-child(even)::after {
+    content: ''; position: absolute; left: 100%; bottom: 50%; width: 14px; height: 50%;
+    border-bottom: 2px solid var(--line); border-right: 2px solid var(--line);
+    pointer-events: none;
+  }
+  .b-col:not(:first-child) .b-slot::before {
+    content: ''; position: absolute; right: 100%; top: 50%; width: 14px; height: 2px;
+    background: var(--line); pointer-events: none;
+  }
   .b-cell {
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     padding: 6px 7px; backdrop-filter: blur(2px); min-width: 0;
@@ -569,7 +605,9 @@
     .b-flag, .b-flag-tbd { width: 17px; height: 17px; }
     .b-cell { padding: 4px 5px; }
     .b-chip { font-size: 8px; }
-    .b-grid4 { gap: 5px; min-width: 460px; }
+    .b-grid4 { gap: 22px; min-width: 470px; --bslot: 92px; }
+    .b-col:not(:last-child) .b-slot::after { width: 11px; }
+    .b-col:not(:first-child) .b-slot::before { width: 11px; }
   }
 
   /* Awards */
@@ -1680,6 +1718,14 @@ const tabPolls = document.getElementById('tabPolls');
 const matchesView = document.getElementById('matchesView');
 const groupsView = document.getElementById('groupsView');
 const bracketView = document.getElementById('bracketView');
+document.getElementById('bracketWrap').addEventListener('click', (e) => {
+  const t = e.target.closest('.b-half-toggle');
+  if (!t) return;
+  const which = t.dataset.half;
+  bracketCollapse[which] = !bracketCollapse[which];
+  store.set('wc26.bracketCollapse2', bracketCollapse);
+  renderBracket();
+});
 const sweepsView = document.getElementById('sweepsView');
 const awardsView = document.getElementById('awardsView');
 const pollsView = document.getElementById('pollsView');
@@ -2129,6 +2175,8 @@ function stageShort(slug) {
 }
 
 let koEvents = null;
+let bracketCollapse = store.get('wc26.bracketCollapse2', { top: true, bottom: true });
+if (!bracketCollapse || typeof bracketCollapse !== 'object') bracketCollapse = { top: true, bottom: true };
 async function loadKnockouts() {
   if (elimsLoaded) { renderBracket(); return; }
   elimsLoaded = true;   // attempt once per page load
@@ -2202,7 +2250,7 @@ function bCellHtml(ev) {
 function bColHtml(label, events, extraClass) {
   return '<div class="b-col' + (extraClass ? ' ' + extraClass : '') + '">' +
     '<div class="b-round-label">' + esc(label) + '</div>' +
-    '<div class="b-cells">' + events.map(bCellHtml).join('') + '</div>' +
+    '<div class="b-cells">' + events.map(ev => '<div class="b-slot">' + bCellHtml(ev) + '</div>').join('') + '</div>' +
   '</div>';
 }
 
@@ -2230,10 +2278,10 @@ function renderBracket() {
 
   const half = (r32, r16, qf, sf) =>
     '<div class="bracket-scroll"><div class="b-grid4">' +
-      bColHtml('Round of 32', r32) +
-      bColHtml('Round of 16', r16) +
-      bColHtml('Quarter-finals', qf) +
-      bColHtml('Semi-final', sf) +
+      bColHtml('Round of 32', r32, 'b-r0') +
+      bColHtml('Round of 16', r16, 'b-r1') +
+      bColHtml('Quarter-finals', qf, 'b-r2') +
+      bColHtml('Semi-final', sf, 'b-r3') +
     '</div></div>';
 
   let winnerHtml = '';
@@ -2252,23 +2300,28 @@ function renderBracket() {
     ? '<div class="b-third"><div class="b-third-label">Third-place play-off</div>' + bCellHtml(TP) + '</div>'
     : '';
 
+  const halfBlock = (which, label, dotClass, body) => {
+    const collapsed = !!bracketCollapse[which];
+    const caret = collapsed ? '\u25b8 show' : '\u25be hide';
+    return '<div class="b-half' + (collapsed ? ' collapsed' : '') + '">' +
+      '<div class="b-half-label ' + dotClass + '">' +
+        '<button class="b-half-toggle" data-half="' + which + '"><span>' + label + '</span>' +
+          '<span class="b-half-caret">' + caret + '</span></button>' +
+      '</div>' + body +
+    '</div>';
+  };
+
   wrap.innerHTML =
     '<div class="bracket-halves">' +
-      '<div class="b-half">' +
-        '<div class="b-half-label b-top">Top half</div>' +
-        half(R32.slice(0, 8), R16.slice(0, 4), QF.slice(0, 2), [SF[0]]) +
-      '</div>' +
+      halfBlock('top', 'Top half', 'b-top', half(R32.slice(0, 8), R16.slice(0, 4), QF.slice(0, 2), [SF[0]])) +
+      halfBlock('bottom', 'Bottom half', 'b-bot', half(R32.slice(8, 16), R16.slice(4, 8), QF.slice(2, 4), [SF[1]])) +
       '<div class="b-final-band">' +
         '<div class="b-half-label b-fin">Final</div>' +
         '<div class="b-final-cell">' + bCellHtml(FIN[0]) + '</div>' +
         winnerHtml + thirdHtml +
       '</div>' +
-      '<div class="b-half">' +
-        '<div class="b-half-label b-bot">Bottom half</div>' +
-        half(R32.slice(8, 16), R16.slice(4, 8), QF.slice(2, 4), [SF[1]]) +
-      '</div>' +
     '</div>' +
-    '<div class="bracket-note">The top and bottom halves meet in the final. Each round runs left to right, with two matches feeding the next. Pairings fill in as the draw is confirmed and games are played — Round of 32 kicks off 28 June.</div>';
+    '<div class="bracket-note">Top half and bottom half each run left to right to a semi-final; the two winners meet in the final. Tap a half to expand it. Pairings fill in as the draw is confirmed — Round of 32 kicks off 28 June.</div>';
 }
 
 function sweepPoints(en) {
