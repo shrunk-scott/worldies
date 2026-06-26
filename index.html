@@ -516,8 +516,8 @@
   }
   ::-webkit-scrollbar-thumb:hover { background: #45d684; background-clip: padding-box; }
   .b-grid4 {
-    display: grid; grid-template-columns: repeat(4, minmax(116px, 1fr));
-    gap: 28px; min-width: 540px; align-items: start; --bslot: 104px;
+    display: grid; grid-template-columns: repeat(4, minmax(124px, 1fr));
+    gap: 28px; min-width: 580px; align-items: start; --bslot: 126px;
   }
   .b-final-band {
     border: 1px solid rgba(232,184,75,0.35); border-radius: 12px;
@@ -577,8 +577,10 @@
     padding: 6px 7px; backdrop-filter: blur(2px); min-width: 0;
   }
   .b-cell.b-live { border-color: rgba(255,70,85,0.45); }
-  .b-team { display: flex; align-items: center; gap: 5px; min-width: 0; flex-wrap: wrap; }
-  .b-team + .b-team { margin-top: 5px; }
+  .b-team { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .b-team + .b-team { margin-top: 6px; }
+  .b-team-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .b-team-chips { display: flex; flex-wrap: wrap; gap: 3px; }
   .b-flag {
     width: 22px; height: 22px; object-fit: contain; flex-shrink: 0;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
@@ -589,19 +591,19 @@
   }
   .b-name {
     font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1;
   }
   .b-team.b-winner .b-name { color: var(--gold); }
   .b-team.b-loser { opacity: 0.5; }
   .b-team.b-tbd .b-name { color: var(--muted); font-weight: 500; font-size: 12px; }
   .b-score {
     margin-left: auto; font-family: 'Barlow Condensed', sans-serif;
-    font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+    font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0;
   }
   .b-chip {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 9px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
-    border-radius: 3px; padding: 0 4px; flex-shrink: 1; min-width: 0;
+    border-radius: 3px; padding: 1px 4px; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
   }
   .b-chip.hoogies { color: var(--gold); border: 1px solid rgba(232,184,75,0.45); }
@@ -624,7 +626,7 @@
     .b-flag, .b-flag-tbd { width: 17px; height: 17px; }
     .b-cell { padding: 4px 5px; }
     .b-chip { font-size: 8px; }
-    .b-grid4 { gap: 22px; min-width: 470px; --bslot: 92px; }
+    .b-grid4 { gap: 22px; min-width: 510px; --bslot: 130px; }
     .b-col:not(:last-child) .b-slot::after { width: 11px; }
     .b-col:not(:first-child) .b-slot::before { width: 11px; }
   }
@@ -2231,7 +2233,7 @@ async function loadKnockouts() {
 
 function bTeamHtml(c) {
   if (!c || !c.team) {
-    return '<div class="b-team b-tbd"><span class="b-flag-tbd"></span><span class="b-name">TBD</span></div>';
+    return '<div class="b-team b-tbd"><div class="b-team-row"><span class="b-flag-tbd"></span><span class="b-name">TBD</span></div></div>';
   }
   const t = c.team;
   const tags = sweepTagsFor(t.id);
@@ -2242,11 +2244,13 @@ function bTeamHtml(c) {
     (tag.role === 'dud' ? ' (' + esc(roleLabel(tag.league, 'dud').toLowerCase()) + ')' : '') + '">' +
     esc(tag.member) + '</span>').join('');
   return '<div class="b-team' + cls + '">' +
-    (t.logo ? '<img class="b-flag" src="' + esc(t.logo) + '" alt="' + esc(t.displayName || '') + ' flag" loading="lazy">'
-            : '<span class="b-flag-tbd"></span>') +
-    '<span class="b-name">' + esc(t.abbreviation || t.shortDisplayName || t.displayName || '?') + '</span>' +
-    (c.score != null && c.score !== '' ? '<span class="b-score">' + esc(c.score) + '</span>' : '') +
-    chips +
+    '<div class="b-team-row">' +
+      (t.logo ? '<img class="b-flag" src="' + esc(t.logo) + '" alt="' + esc(t.displayName || '') + ' flag" loading="lazy">'
+              : '<span class="b-flag-tbd"></span>') +
+      '<span class="b-name">' + esc(t.abbreviation || t.shortDisplayName || t.displayName || '?') + '</span>' +
+      (c.score != null && c.score !== '' ? '<span class="b-score">' + esc(c.score) + '</span>' : '') +
+    '</div>' +
+    (chips ? '<div class="b-team-chips">' + chips + '</div>' : '') +
   '</div>';
 }
 
