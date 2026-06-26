@@ -544,10 +544,7 @@
     overflow: hidden; text-overflow: ellipsis;
   }
   .b-cells { display: flex; flex-direction: column; }
-  .b-slot {
-    display: flex; align-items: center; justify-content: center;
-    position: relative;
-  }
+  .b-slot { position: relative; }
   /* Fixed per-round slot heights: each round's slot is twice the previous, so a
      match sits exactly on the midpoint between the two that feed it, regardless
      of how tall the cell content (sweep chips) happens to be. */
@@ -555,7 +552,12 @@
   .b-col.b-r1 .b-slot { height: calc(var(--bslot) * 2); }
   .b-col.b-r2 .b-slot { height: calc(var(--bslot) * 4); }
   .b-col.b-r3 .b-slot { height: calc(var(--bslot) * 8); }
-  .b-slot .b-cell { width: 100%; }
+  /* The cell fills the slot's width and is centred vertically, so the slot's
+     right/left edges (where connectors anchor) coincide exactly with the cell. */
+  .b-slot .b-cell {
+    position: absolute; top: 50%; left: 0; right: 0;
+    transform: translateY(-50%);
+  }
   /* Connector lines. Each match links to the next round with an elbow that meets
      its sibling at the exact vertical midpoint between the two feeding matches. */
   .b-col:not(:last-child) .b-slot:nth-child(odd)::after {
