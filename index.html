@@ -493,6 +493,31 @@
   .lb-bonus.pending .lb-bonus-label { color: var(--muted); }
   .lb-prelim-tag { color: var(--gold); font-style: italic; font-size: 11.5px; }
 
+  /* Shrunk awards & points system (collapsible) */
+  .rules-box { margin: 10px 0 14px; border: 1px solid rgba(47,191,113,0.3); border-radius: 10px; overflow: hidden; }
+  .rules-toggle {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    background: rgba(47,191,113,0.06); border: none; cursor: pointer; padding: 9px 12px;
+    color: var(--pitch); font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .rules-caret {
+    color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: none;
+    font-family: Barlow, sans-serif; font-weight: 400;
+  }
+  .rules-body { padding: 10px 12px 12px; display: grid; gap: 11px; }
+  .rules-group-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px;
+  }
+  .rules-row { font-size: 13px; color: var(--ink, #dfe8f2); padding: 2px 0; line-height: 1.45; }
+  .rules-pts {
+    display: inline-block; min-width: 36px; font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; color: var(--pitch); font-variant-numeric: tabular-nums;
+  }
+  .rules-pts.neg { color: var(--live); }
+  .rules-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
   .sweep-tag.hoogies { color: var(--gold); border: 1px solid rgba(232,184,75,0.45); }
   .sweep-tag.shrunk { color: var(--pitch); border: 1px solid rgba(47,191,113,0.45); }
   .sweep-tag.dud, .b-chip.dud { border-style: dashed; opacity: 0.85; }
@@ -2967,6 +2992,53 @@ function teamOptions() {
     .join('');
 }
 
+/* Shrunk awards & points system panel — collapsed by default */
+let shrunkRulesOpen = store.get('wc26.shrunkRulesOpen', false);
+function shrunkRulesHtml() {
+  const row = (pts, text) =>
+    '<div class="rules-row"><span class="rules-pts' + (pts.charAt(0) === '−' ? ' neg' : '') + '">' + pts + '</span> ' + text + '</div>';
+  const group = (title, rows) => '<div><div class="rules-group-title">' + title + '</div>' + rows.join('') + '</div>';
+  const body = !shrunkRulesOpen ? '' : '<div class="rules-body">' +
+    group('Match points — every game, groups &amp; knockouts', [
+      row('+2', 'per win'),
+      row('+1', 'per draw'),
+      row('−1', 'per loss')
+    ]) +
+    group('Finals awards', [
+      row('+10', '<b>World Cup winners</b> — owner of the champions'),
+      row('+5', '<b>Runners-up</b> — owner of the losing finalist'),
+      row('+10', '<b>Underdog run</b> — worst FIFA-ranked team to reach the final (rank = draw order, 1–48)'),
+      row('+3', '<b>Third-place consolation</b> — winner of the third-place play-off')
+    ]) +
+    group('Dud awards', [
+      row('+10', '<b>Top Dud</b> — the Dud pick with the most match points (tie-break: knockout wins)'),
+      row('+5', '<b>Last Dud standing</b> — owner of the final Dud left alive'),
+      row('+5', '<b>Giant killer</b> — each time one of your Duds beats a top-10 team (repeatable)')
+    ]) +
+    group('Chaos awards', [
+      row('+3', '<b>Shootout specialist</b> — each penalty-shootout win by any of your teams (repeatable)'),
+      row('+5', '<b>Biggest upset</b> — owner of the winning team in the result with the largest rank gap'),
+      row('+3', '<b>Highest-scoring match</b> — owner of the winning team in the biggest goal-fest')
+    ]) +
+    group('Goal difference', [
+      row('+10', '<b>Best combined GD</b> — all eight of your teams\u2019 goals for minus goals against'),
+      row('−15', '<b>Worst combined GD</b>')
+    ]) +
+    group('Penalties', [
+      row('−10', '<b>First top-10 team out</b> — owner of the first top-10 ranked team knocked out'),
+      row('−5', '<b>Favourite flop</b> — each top-5 team out before the quarter-finals'),
+      row('−5', '<b>Group-stage embarrassment</b> — each Best pick knocked out in the groups')
+    ]) +
+    '<div class="rules-note">Awards land on the leaderboard as soon as they are decided. Gold-tagged awards in the bonus list are preliminary and can change hands until the tournament is finalised; dead heats are shared, with every tied player receiving the award.</div>' +
+  '</div>';
+  return '<div class="rules-box">' +
+    '<button class="rules-toggle" aria-expanded="' + (shrunkRulesOpen ? 'true' : 'false') + '">' +
+      '<span>Awards &amp; points system</span>' +
+      '<span class="rules-caret">' + (shrunkRulesOpen ? '\u25be hide' : '\u25b8 show') + '</span>' +
+    '</button>' + body +
+  '</div>';
+}
+
 let currentSweepLeague = null;
 function renderSweeps(league) {
   if (league) currentSweepLeague = league;
@@ -3016,12 +3088,14 @@ function renderSweeps(league) {
             '</tr>';
           }).join('') + '</tbody>' +
         '</table>' +
-        '<div class="lb-bonuses">' + bonuses.items.map(it =>
-          '<div class="lb-bonus' + (it.pending ? ' pending' : '') + '">' +
-            '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) +
-            (it.prelim ? ' <span class="lb-prelim-tag">preliminary — finalised after the final</span>' : '') +
-          '</div>').join('') +
-        '</div>' +
+        (bonuses.items.some(it => !it.pending)
+          ? '<div class="lb-bonuses">' + bonuses.items.filter(it => !it.pending).map(it =>
+              '<div class="lb-bonus">' +
+                '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) +
+                (it.prelim ? ' <span class="lb-prelim-tag">preliminary — finalised after the final</span>' : '') +
+              '</div>').join('') +
+            '</div>'
+          : '') +
       '</div>';
     }
     const rows = entries.map((en, i) => sweepRow(league, en, i)).join('');
@@ -3034,6 +3108,7 @@ function renderSweeps(league) {
           ? '<button class="charter-btn" style="margin-left:auto;background:none;cursor:pointer;color:var(--gold);font-family:Barlow,sans-serif;font-size:13px;letter-spacing:0.02em;text-transform:none;font-weight:500;border:1px solid rgba(232,184,75,0.45);border-radius:6px;padding:3px 10px">Competition Charter</button>'
           : '') +
       '</div>' +
+      (league === 'Shrunk' ? shrunkRulesHtml() : '') +
       leaderboardHtml +
       (entries.length
         ? '<table class="sweep-table">' +
@@ -3041,10 +3116,7 @@ function renderSweeps(league) {
             (league === 'Shrunk' ? '<th title="Win +2, draw +1, loss \u22121">Pts</th>' : '') +
             '<th>Status</th>' +
             (locked ? '' : '<th></th>') + '</tr></thead>' +
-            '<tbody>' + rows + '</tbody></table>' +
-          (league === 'Shrunk'
-            ? '<div class="sweep-empty" style="padding-top:10px">Scoring: win +2 points, draw +1 point, loss \u22121 point. Bonuses: winners +10 \u00b7 runners-up +5 \u00b7 underdog run +10 \u00b7 first top-10 team out \u221210 \u00b7 best combined GD +10 \u00b7 worst combined GD \u221215 \u00b7 third place +3 \u00b7 top Dud +10 \u00b7 last Dud standing +5 \u00b7 giant killer +5 per Dud scalp of a top-10 team \u00b7 shootout win +3 each \u00b7 biggest upset +5 \u00b7 highest-scoring match win +3 \u00b7 favourite flop (top-5 out before QF) \u22125 \u00b7 Best pick out in groups \u22125. Gold-tagged awards are preliminary until the final. Ranked highest to lowest.</div>'
-            : '')
+            '<tbody>' + rows + '</tbody></table>'
         : '<div class="sweep-empty">No members yet — add the sweep draw below.</div>') +
       (locked ? '' :
         '<div class="sweep-add">' +
@@ -3125,6 +3197,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 sweepsMain.addEventListener('click', (e) => {
+  const rulesToggle = e.target.closest('.rules-toggle');
+  if (rulesToggle) {
+    shrunkRulesOpen = !shrunkRulesOpen;
+    store.set('wc26.shrunkRulesOpen', shrunkRulesOpen);
+    renderSweeps();
+    return;
+  }
   const charter = e.target.closest('.charter-btn');
   if (charter) { openCharter(); return; }
   const add = e.target.closest('.sweep-add-btn');
