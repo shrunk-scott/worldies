@@ -490,6 +490,7 @@
   .lb-bonus { font-size: 12.5px; color: var(--ink, #dfe8f2); }
   .lb-bonus.pending { color: var(--muted); }
   .lb-bonus-label { font-weight: 600; color: var(--pitch); }
+  .lb-bonus-label.neg { color: var(--live); }
   .lb-bonus.pending .lb-bonus-label { color: var(--muted); }
   .lb-prelim-tag { color: var(--gold); font-style: italic; font-size: 11.5px; }
 
@@ -2768,7 +2769,7 @@ function shrunkBonuses() {
     first.forEach(en => {
       add(en.member, -10);
       items.push({ label: 'First top-10 team out −10', text: en.member + ' — ' + teamName(en.teamId) +
-        ' (out ' + eliminated[en.teamId] + ')' });
+        ' (out ' + eliminated[en.teamId] + ')', neg: true });
     });
   } else {
     items.push({ label: 'First top-10 team out −10', text: 'no top-10 team eliminated yet', pending: true });
@@ -2795,7 +2796,7 @@ function shrunkBonuses() {
     });
     names.filter(k => memberGd[k] === worstGd).forEach(k => {
       add(k, -15);
-      items.push({ label: 'Worst combined GD −15', text: k + ' — GD ' + fmtGd(worstGd), prelim });
+      items.push({ label: 'Worst combined GD −15', text: k + ' — GD ' + fmtGd(worstGd), prelim, neg: true });
     });
   } else {
     items.push({ label: 'Best combined GD +10', text: 'no games played yet', pending: true });
@@ -2929,7 +2930,7 @@ function shrunkBonuses() {
   if (flops.length) {
     flops.forEach(en => {
       add(en.member, -5);
-      items.push({ label: 'Favourite flop −5', text: en.member + ' — ' + teamName(en.teamId) + ' (out ' + eliminated[en.teamId] + ')' });
+      items.push({ label: 'Favourite flop −5', text: en.member + ' — ' + teamName(en.teamId) + ' (out ' + eliminated[en.teamId] + ')', neg: true });
     });
   } else {
     items.push({ label: 'Favourite flop −5', text: 'no top-5 team out before the quarter-finals', pending: true });
@@ -2941,7 +2942,7 @@ function shrunkBonuses() {
   if (embarrassed.length) {
     embarrassed.forEach(en => {
       add(en.member, -5);
-      items.push({ label: 'Group-stage embarrassment −5', text: en.member + ' — ' + teamName(en.teamId) });
+      items.push({ label: 'Group-stage embarrassment −5', text: en.member + ' — ' + teamName(en.teamId), neg: true });
     });
   } else {
     items.push({ label: 'Group-stage embarrassment −5',
@@ -3100,7 +3101,7 @@ function renderSweeps(league) {
               (shrunkAwardsOpen
                 ? '<div class="rules-body"><div class="lb-bonuses" style="margin-top:0">' + awarded.map(it =>
                     '<div class="lb-bonus">' +
-                      '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) +
+                      '<span class="lb-bonus-label' + (it.neg ? ' neg' : '') + '">' + esc(it.label) + ':</span> ' + esc(it.text) +
                       (it.prelim ? ' <span class="lb-prelim-tag">preliminary — finalised after the final</span>' : '') +
                     '</div>').join('') +
                   '</div></div>'
