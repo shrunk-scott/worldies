@@ -491,6 +491,7 @@
   .lb-bonus.pending { color: var(--muted); }
   .lb-bonus-label { font-weight: 600; color: var(--pitch); }
   .lb-bonus.pending .lb-bonus-label { color: var(--muted); }
+  .lb-prelim-tag { color: var(--gold); font-style: italic; font-size: 11.5px; }
 
   .sweep-tag.hoogies { color: var(--gold); border: 1px solid rgba(232,184,75,0.45); }
   .sweep-tag.shrunk { color: var(--pitch); border: 1px solid rgba(47,191,113,0.45); }
@@ -2102,6 +2103,7 @@ let champion = null;
 let runnerUp = null;           // teamId of the losing finalist
 let finalists = [];            // both finalist teamIds once the final pairing is set
 let elimDate = {};             // teamId -> kickoff date of the match that knocked them out
+let koGd = {};                 // teamId -> goal difference across knockout games (incl. 3rd place)
 let elimsLoaded = false;
 const sweepsMain = document.getElementById('sweepsMain');
 
@@ -2356,6 +2358,7 @@ async function loadKnockouts() {
     runnerUp = null;
     finalists = [];
     elimDate = {};
+    koGd = {};
     const lastGroupGame = {};   // teamId -> date of their latest finished group game
     const knockoutTeamIds = new Set();
     koEvents.forEach(ev => {
@@ -2386,6 +2389,12 @@ async function loadKnockouts() {
       const winner = comps.find(c => c.winner);
       if (winner?.team?.id) koWins[winner.team.id] = (koWins[winner.team.id] || 0) + 1;
       if (loser?.team?.id) koLosses[loser.team.id] = (koLosses[loser.team.id] || 0) + 1;
+      // Match-score goal difference (shootouts excluded — c.score is the match score)
+      if (comps.length === 2 && comps.every(c => c.team?.id && c.score != null && c.score !== '')) {
+        const s0 = Number(comps[0].score) || 0, s1 = Number(comps[1].score) || 0;
+        koGd[comps[0].team.id] = (koGd[comps[0].team.id] || 0) + (s0 - s1);
+        koGd[comps[1].team.id] = (koGd[comps[1].team.id] || 0) + (s1 - s0);
+      }
       if (slug === 'third-place-match') return;   // counts for points, not elimination
       if (loser?.team?.id) {
         eliminated[loser.team.id] = stageShort(slug);
@@ -2721,6 +2730,34 @@ function shrunkBonuses() {
     items.push({ label: 'First top-10 team out −10', text: 'no top-10 team eliminated yet', pending: true });
   }
 
+  // Combined goal difference across each member's teams (group + knockout goals).
+  // Best +10, worst −15 — preliminary until the tournament is finalised.
+  const gdOf = en => (Number(teamIndex[en.teamId]?.gd) || 0) + (koGd[en.teamId] || 0);
+  const memberGd = {};
+  let anyGames = false;
+  sweeps.Shrunk.forEach(en => {
+    memberGd[en.member] = (memberGd[en.member] || 0) + gdOf(en);
+    if (en.teamId && sweepGames(en) > 0) anyGames = true;
+  });
+  const fmtGd = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+  const prelim = !champion;   // finalised once the World Cup has been won
+  if (anyGames) {
+    const names = Object.keys(memberGd);
+    const bestGd = Math.max(...names.map(k => memberGd[k]));
+    const worstGd = Math.min(...names.map(k => memberGd[k]));
+    names.filter(k => memberGd[k] === bestGd).forEach(k => {
+      add(k, 10);
+      items.push({ label: 'Best combined GD +10', text: k + ' — GD ' + fmtGd(bestGd), prelim });
+    });
+    names.filter(k => memberGd[k] === worstGd).forEach(k => {
+      add(k, -15);
+      items.push({ label: 'Worst combined GD −15', text: k + ' — GD ' + fmtGd(worstGd), prelim });
+    });
+  } else {
+    items.push({ label: 'Best combined GD +10', text: 'no games played yet', pending: true });
+    items.push({ label: 'Worst combined GD −15', text: 'no games played yet', pending: true });
+  }
+
   return { byMember, items };
 }
 
@@ -2799,7 +2836,7 @@ function renderSweeps(league) {
       leaderboardHtml = '<div class="leaderboard">' +
         '<div class="leaderboard-title">Leaderboard</div>' +
         '<table class="lb-table">' +
-          '<thead><tr><th>#</th><th>Member</th><th>Teams alive</th><th title="Total games played by this member&rsquo;s teams">GP</th><th title="Bonuses: winners +10, runners-up +5, underdog run +10, first top-10 team out \u221210">Bonus</th><th>Pts</th></tr></thead>' +
+          '<thead><tr><th>#</th><th>Member</th><th>Teams alive</th><th title="Total games played by this member&rsquo;s teams">GP</th><th title="Bonuses: winners +10, runners-up +5, underdog run +10, first top-10 team out \u221210, best combined GD +10, worst combined GD \u221215">Bonus</th><th>Pts</th></tr></thead>' +
           '<tbody>' + ranked.map((name, i) => {
             const t = totals[name];
             const cls = i === 0 ? ' class="lb-first"' : (i === ranked.length - 1 ? ' class="lb-last"' : '');
@@ -2816,7 +2853,9 @@ function renderSweeps(league) {
         '</table>' +
         '<div class="lb-bonuses">' + bonuses.items.map(it =>
           '<div class="lb-bonus' + (it.pending ? ' pending' : '') + '">' +
-            '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) + '</div>').join('') +
+            '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) +
+            (it.prelim ? ' <span class="lb-prelim-tag">preliminary — finalised after the final</span>' : '') +
+          '</div>').join('') +
         '</div>' +
       '</div>';
     }
@@ -2839,7 +2878,7 @@ function renderSweeps(league) {
             (locked ? '' : '<th></th>') + '</tr></thead>' +
             '<tbody>' + rows + '</tbody></table>' +
           (league === 'Shrunk'
-            ? '<div class="sweep-empty" style="padding-top:10px">Scoring: win +2 points, draw +1 point, loss \u22121 point. Bonuses: World Cup winners +10, runners-up +5, underdog run (worst-ranked finalist) +10, first top-10 team out \u221210. Ranked highest to lowest.</div>'
+            ? '<div class="sweep-empty" style="padding-top:10px">Scoring: win +2 points, draw +1 point, loss \u22121 point. Bonuses: World Cup winners +10, runners-up +5, underdog run (worst-ranked finalist) +10, first top-10 team out \u221210, best combined goal difference +10, worst combined GD \u221215 (GD awards preliminary until the final). Ranked highest to lowest.</div>'
             : '')
         : '<div class="sweep-empty">No members yet — add the sweep draw below.</div>') +
       (locked ? '' :
