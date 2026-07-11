@@ -2892,18 +2892,22 @@ function shrunkBonuses() {
     items.push({ label: 'Giant killer +5 per scalp', text: 'no Dud has beaten a top-10 team yet', pending: true });
   }
 
-  // Shootout specialist +3 per shootout win (any of your teams)
+  // Shootout specialist +3 per win — single winner: the player with the most
+  // shootout wins (ties: first to reach the count, then alphabetical)
   const soWins = {};
   matchResults.forEach(m => {
     if (!m.shootout) return;
     const wEn = shrunkEntryByTeam(m.winnerId);
-    if (wEn) (soWins[wEn.member] = soWins[wEn.member] || []).push(teamName(m.winnerId));
+    if (wEn) (soWins[wEn.member] = soWins[wEn.member] || []).push({ name: teamName(m.winnerId), date: m.date });
   });
-  if (Object.keys(soWins).length) {
-    Object.keys(soWins).sort().forEach(k => {
-      add(k, 3 * soWins[k].length);
-      items.push({ label: 'Shootout specialist +3 per win', text: k + ' +' + (3 * soWins[k].length) + ' — ' + soWins[k].join(', ') });
-    });
+  const soNames = Object.keys(soWins);
+  if (soNames.length) {
+    const lastSoWin = k => Math.max(...soWins[k].map(w => new Date(w.date).getTime()));
+    const soK = soNames.sort((a, b) =>
+      soWins[b].length - soWins[a].length || lastSoWin(a) - lastSoWin(b) || a.localeCompare(b))[0];
+    add(soK, 3 * soWins[soK].length);
+    items.push({ label: 'Shootout specialist +3 per win', text: soK + ' +' + (3 * soWins[soK].length) + ' — ' +
+      soWins[soK].map(w => w.name).join(', '), prelim });
   } else {
     items.push({ label: 'Shootout specialist +3 per win', text: 'no shootout wins yet', pending: true });
   }
@@ -2918,13 +2922,15 @@ function shrunkBonuses() {
     else if (gap === upsetGap && gap > 0) upsets.push(m);
   });
   if (upsets.length) {
-    upsets.forEach(m => {
-      const en = shrunkEntryByTeam(m.winnerId);
-      if (!en) return;
+    // Single winner — ties broken by bigger winning margin, then the earlier match
+    const m = upsets.sort((a, b) =>
+      (b.margin || 0) - (a.margin || 0) || new Date(a.date) - new Date(b.date))[0];
+    const en = shrunkEntryByTeam(m.winnerId);
+    if (en) {
       add(en.member, 5);
       items.push({ label: 'Biggest upset +5', text: en.member + ' — ' + teamName(m.winnerId) +
         ' (rank ' + shrunkRank(m.winnerId) + ') beat ' + teamName(m.loserId) + ' (rank ' + shrunkRank(m.loserId) + ')', prelim });
-    });
+    }
   } else {
     items.push({ label: 'Biggest upset +5', text: 'no upsets yet', pending: true });
   }
@@ -2989,11 +2995,22 @@ function shrunkBonuses() {
     3, en => en.member + ' — ' + teamName(en.teamId) + ' won all three group games',
     'no team won all three group games');
 
-  // Pointless −3 — lost all three group games
-  groupAward('Pointless −3',
-    sweeps.Shrunk.filter(en => { const t = teamIndex[en.teamId]; return t && Number(t.gp) >= 3 && Number(t.l) === 3; }),
-    -3, en => en.member + ' — ' + teamName(en.teamId) + ' lost all three group games',
-    'no team lost all three group games');
+  // Pointless −3 — single winner: the worst of the teams that lost all three
+  // group games (ties: worst GD, fewest goals scored, worst FIFA rank)
+  const pointless = sweeps.Shrunk.filter(en => { const t = teamIndex[en.teamId]; return t && Number(t.gp) >= 3 && Number(t.l) === 3; });
+  if (pointless.length) {
+    const pEn = pointless.slice().sort((a, b) => {
+      const ta = teamIndex[a.teamId], tb = teamIndex[b.teamId];
+      return (Number(ta.gd) || 0) - (Number(tb.gd) || 0) ||
+             (Number(ta.gf) || 0) - (Number(tb.gf) || 0) ||
+             (shrunkRank(b.teamId) || 0) - (shrunkRank(a.teamId) || 0) ||
+             a.member.localeCompare(b.member);
+    })[0];
+    add(pEn.member, -3);
+    items.push({ label: 'Pointless −3', text: pEn.member + ' — ' + teamName(pEn.teamId) + ' lost all three group games', neg: true });
+  } else {
+    items.push({ label: 'Pointless −3', text: groupStageOver ? 'no team lost all three group games' : 'decided after the group stage', pending: !groupStageOver });
+  }
 
   // Group toppers +2 each — finished first in the group
   groupAward('Group topper +2',
@@ -3012,10 +3029,16 @@ function shrunkBonuses() {
   if (groupStageOver) {
     const bestByMember = {};
     sweeps.Shrunk.forEach(en => { if (en.role === 'best') (bestByMember[en.member] = bestByMember[en.member] || []).push(en); });
-    const fullHouse = Object.keys(bestByMember).sort()
+    const fullHouse = Object.keys(bestByMember)
       .filter(k => bestByMember[k].every(en => en.teamId && eliminated[en.teamId] !== 'Group'));
     if (fullHouse.length) {
-      fullHouse.forEach(k => { add(k, 5); items.push({ label: 'Full house +5', text: k + ' — all Best picks reached the knockouts' }); });
+      // Single winner — ties broken by the Best picks' combined group points, then GD
+      const fhPts = k => bestByMember[k].reduce((n, en) => n + (Number(teamIndex[en.teamId]?.pts) || 0), 0);
+      const fhGd = k => bestByMember[k].reduce((n, en) => n + (Number(teamIndex[en.teamId]?.gd) || 0), 0);
+      const fhK = fullHouse.sort((a, b) => fhPts(b) - fhPts(a) || fhGd(b) - fhGd(a) || a.localeCompare(b))[0];
+      add(fhK, 5);
+      items.push({ label: 'Full house +5', text: fhK + ' — all Best picks reached the knockouts' +
+        (fullHouse.length > 1 ? ' (won the tie on group points)' : '') });
     } else {
       items.push({ label: 'Full house +5', text: 'no player got every Best pick through the groups' });
     }
@@ -3027,11 +3050,16 @@ function shrunkBonuses() {
   if (groupStageOver) {
     const dudThrough = {};
     sweeps.Shrunk.forEach(en => {
-      if (en.role === 'dud' && en.teamId && eliminated[en.teamId] !== 'Group') dudThrough[en.member] = (dudThrough[en.member] || 0) + 1;
+      if (en.role === 'dud' && en.teamId && eliminated[en.teamId] !== 'Group') (dudThrough[en.member] = dudThrough[en.member] || []).push(en);
     });
-    const doubles = Object.keys(dudThrough).sort().filter(k => dudThrough[k] >= 2);
+    const doubles = Object.keys(dudThrough).filter(k => dudThrough[k].length >= 2);
     if (doubles.length) {
-      doubles.forEach(k => { add(k, 5); items.push({ label: 'Dud double +5', text: k + ' — ' + dudThrough[k] + ' Duds reached the knockouts' }); });
+      // Single winner — most Duds through; ties broken by those Duds' combined group points
+      const ddPts = k => dudThrough[k].reduce((n, en) => n + (Number(teamIndex[en.teamId]?.pts) || 0), 0);
+      const ddK = doubles.sort((a, b) =>
+        dudThrough[b].length - dudThrough[a].length || ddPts(b) - ddPts(a) || a.localeCompare(b))[0];
+      add(ddK, 5);
+      items.push({ label: 'Dud double +5', text: ddK + ' — ' + dudThrough[ddK].length + ' Duds reached the knockouts' });
     } else {
       items.push({ label: 'Dud double +5', text: 'no player got two Duds through the groups' });
     }
@@ -3075,34 +3103,40 @@ function shrunkBonuses() {
     else if (mg === bigMargin && mg > 0) blowouts.push(m);
   });
   if (bigMargin > 0) {
-    blowouts.forEach(m => {
-      const wEn = shrunkEntryByTeam(m.winnerId), lEn = shrunkEntryByTeam(m.loserId);
-      if (wEn) {
-        add(wEn.member, 3);
-        items.push({ label: 'Demolition job +3', text: wEn.member + ' — ' + teamName(m.winnerId) + ' won by ' + bigMargin + ' v ' + teamName(m.loserId), prelim });
-      }
-      if (lEn) {
-        add(lEn.member, -3);
-        items.push({ label: 'Steamrolled −3', text: lEn.member + ' — ' + teamName(m.loserId) + ' lost by ' + bigMargin + ' v ' + teamName(m.winnerId), prelim, neg: true });
-      }
-    });
+    // Single match — ties broken by more total goals, then the earlier game
+    const bm = blowouts.sort((a, b) =>
+      (b.goals || 0) - (a.goals || 0) || new Date(a.date) - new Date(b.date))[0];
+    const wEn = shrunkEntryByTeam(bm.winnerId), lEn = shrunkEntryByTeam(bm.loserId);
+    if (wEn) {
+      add(wEn.member, 3);
+      items.push({ label: 'Demolition job +3', text: wEn.member + ' — ' + teamName(bm.winnerId) + ' won by ' + bigMargin + ' v ' + teamName(bm.loserId), prelim });
+    }
+    if (lEn) {
+      add(lEn.member, -3);
+      items.push({ label: 'Steamrolled −3', text: lEn.member + ' — ' + teamName(bm.loserId) + ' lost by ' + bigMargin + ' v ' + teamName(bm.winnerId), prelim, neg: true });
+    }
   } else {
     items.push({ label: 'Demolition job +3', text: 'no decided matches yet', pending: true });
     items.push({ label: 'Steamrolled −3', text: 'no decided matches yet', pending: true });
   }
 
   // Snoozefest −2 per 0-0 — every goalless draw, both owners cop it
+  // Single winner: the player with the most goalless draws pays −2 for each
+  // (ties: first to reach the count, then alphabetical)
   const nilNils = {};
   teamGameLog.forEach(g => {
     if (g.res !== 'D' || g.g !== 0) return;
     const en = shrunkEntryByTeam(g.id);
-    if (en) nilNils[en.member] = (nilNils[en.member] || 0) + 1;
+    if (en) (nilNils[en.member] = nilNils[en.member] || []).push(new Date(g.date).getTime());
   });
-  if (Object.keys(nilNils).length) {
-    Object.keys(nilNils).sort().forEach(k => {
-      add(k, -2 * nilNils[k]);
-      items.push({ label: 'Snoozefest −2 per 0-0', text: k + ' −' + (2 * nilNils[k]) + ' — ' + nilNils[k] + (nilNils[k] === 1 ? ' goalless draw' : ' goalless draws'), neg: true });
-    });
+  const nnNames = Object.keys(nilNils);
+  if (nnNames.length) {
+    const lastNn = k => Math.max(...nilNils[k]);
+    const nnK = nnNames.sort((a, b) =>
+      nilNils[b].length - nilNils[a].length || lastNn(a) - lastNn(b) || a.localeCompare(b))[0];
+    add(nnK, -2 * nilNils[nnK].length);
+    items.push({ label: 'Snoozefest −2 per 0-0', text: nnK + ' −' + (2 * nilNils[nnK].length) + ' — ' +
+      nilNils[nnK].length + (nilNils[nnK].length === 1 ? ' goalless draw' : ' goalless draws'), prelim, neg: true });
   } else {
     items.push({ label: 'Snoozefest −2 per 0-0', text: 'no goalless draws yet', pending: true });
   }
@@ -3209,13 +3243,13 @@ function shrunkRulesHtml() {
       row('+5', '<b>Giant killer</b> — each time one of your Duds beats a top-10 team (repeatable)')
     ]) +
     group('Chaos awards', [
-      row('+3', '<b>Shootout specialist</b> — each penalty-shootout win by any of your teams (repeatable)'),
+      row('+3', '<b>Shootout specialist</b> — the player with the most shootout wins banks +3 per win'),
       row('+5', '<b>Biggest upset</b> — owner of the winning team in the result with the largest rank gap'),
       row('+3', '<b>Highest-scoring match</b> — owner of the winning team in the biggest goal-fest')
     ]) +
     group('Group-stage awards', [
       row('+3', '<b>Perfect group</b> — each team of yours that wins all three group games'),
-      row('−3', '<b>Pointless</b> — each team of yours that loses all three'),
+      row('−3', '<b>Pointless</b> — owner of the worst team to lose all three group games'),
       row('+2', '<b>Group topper</b> — each team of yours that finishes first in its group'),
       row('+3', '<b>Escape artist</b> — each team of yours advancing as a best third-placed side'),
       row('+5', '<b>Full house</b> — all of your Best picks reach the knockouts'),
@@ -3226,7 +3260,7 @@ function shrunkRulesHtml() {
       row('−5', '<b>Leaky bucket</b> — most goals conceded per game'),
       row('+3', '<b>Demolition job</b> — owner of the team that wins by the tournament\u2019s biggest margin'),
       row('−3', '<b>Steamrolled</b> — owner of the team on the wrong end of it'),
-      row('−2', '<b>Snoozefest</b> — every goalless draw one of your teams plays out (both owners)')
+      row('−2', '<b>Snoozefest</b> — the player with the most goalless draws pays −2 for each one')
     ]) +
     group('Streaks &amp; stamina', [
       row('+3', '<b>The marathon</b> — most total games played by your teams'),
@@ -3241,7 +3275,7 @@ function shrunkRulesHtml() {
       row('−5', '<b>Favourite flop</b> — each top-5 team out before the quarter-finals'),
       row('−5', '<b>Group-stage embarrassment</b> — each Best pick knocked out in the groups')
     ]) +
-    '<div class="rules-note">Awards land on the leaderboard as soon as they are decided. Gold-tagged awards in the bonus list are preliminary and can change hands until the tournament is finalised; dead heats are shared, with every tied player receiving the award.</div>' +
+    '<div class="rules-note">Awards land on the leaderboard as soon as they are decided. Gold-tagged awards in the bonus list are preliminary and can change hands until the tournament is finalised. Dead heats are shared, except the single-winner awards — Pointless, Full house, Dud double, Snoozefest, Shootout specialist, Demolition job, Steamrolled and Biggest upset — where ties are broken on group points, goal difference, margins, or who set the mark first.</div>' +
   '</div>';
   return '<div class="rules-box">' +
     '<button class="rules-toggle" data-panel="rules" aria-expanded="' + (shrunkRulesOpen ? 'true' : 'false') + '">' +
