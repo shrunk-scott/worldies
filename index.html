@@ -483,6 +483,14 @@
   .lb-table tr.lb-first td { background: rgba(232,184,75,0.08); }
   .lb-table tr.lb-first .lb-member, .lb-table tr.lb-first .lb-rank { color: var(--gold); }
   .lb-table tr.lb-last .lb-pts { color: var(--live); }
+  .lb-bonus-cell { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; color: var(--muted); }
+  .lb-bonus-cell.pos { color: var(--pitch); }
+  .lb-bonus-cell.neg { color: var(--live); }
+  .lb-bonuses { margin-top: 8px; display: grid; gap: 3px; }
+  .lb-bonus { font-size: 12.5px; color: var(--ink, #dfe8f2); }
+  .lb-bonus.pending { color: var(--muted); }
+  .lb-bonus-label { font-weight: 600; color: var(--pitch); }
+  .lb-bonus.pending .lb-bonus-label { color: var(--muted); }
 
   .sweep-tag.hoogies { color: var(--gold); border: 1px solid rgba(232,184,75,0.45); }
   .sweep-tag.shrunk { color: var(--pitch); border: 1px solid rgba(47,191,113,0.45); }
@@ -747,6 +755,24 @@
     font-variant-numeric: tabular-nums;
   }
   .pred-in:focus { outline: none; border-color: var(--pitch); }
+  /* Per-game score tip */
+  .poll-score { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .poll-score .score-in { width: 44px; }
+  .score-save {
+    background: rgba(47,191,113,0.14); border: 1px solid var(--pitch); color: var(--pitch);
+    border-radius: 7px; padding: 5px 10px; font-family: inherit; font-size: 13px; cursor: pointer;
+  }
+  .score-save:hover { background: rgba(47,191,113,0.24); }
+  .score-save:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
+  .poll-score-note { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .poll-score-note strong { color: var(--pitch); }
+  .score-lead { margin-right: 2px; }
+  .score-side { display: inline-flex; align-items: center; gap: 5px; }
+  .score-team { display: inline-flex; align-items: center; gap: 4px; color: var(--text); font-size: 13px; white-space: nowrap; }
+  .score-flag { width: 18px; height: 18px; object-fit: contain; }
+  .score-dash { color: var(--muted); }
+  .poll-score-who { margin-top: 10px; }
+  .poll-score-who-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 4px; }
 
   /* Polls */
   .poll-voter {
@@ -1602,7 +1628,7 @@ async function load() {
     updateCountdown();
     scheduleNext(hasLive);
     if (currentTab === 'Awards') { refreshLiveScorers(); scanCompletedScorers(); }
-    if (currentTab === 'Polls') renderPolls();
+    if (currentTab === 'Polls') loadVotes();   // pull others' new/changed tips without a manual refresh
   } catch (err) {
     content.innerHTML = '<div class="error-box">Could not load scores (' + esc(err.message) +
       '). The feed may be briefly unavailable — it will retry automatically, or hit Refresh.</div>';
@@ -1845,6 +1871,7 @@ function setTab(which) {
   if (which === 'bracket') loadKnockouts();
   if (which === 'Awards') {
     if (!standingsData) loadStandings();
+    loadKnockouts();   // populate knockout eliminations so the Punchin' lock can bound alive teams
     loadAwards();
   }
   if (which === 'Polls') {
@@ -2072,6 +2099,9 @@ let eliminated = {};           // teamId -> 'R32' | 'R16' | 'QF' | 'SF' | 'F'
 let koWins = {};               // teamId -> knockout wins (incl. 3rd place match)
 let koLosses = {};             // teamId -> knockout losses
 let champion = null;
+let runnerUp = null;           // teamId of the losing finalist
+let finalists = [];            // both finalist teamIds once the final pairing is set
+let elimDate = {};             // teamId -> kickoff date of the match that knocked them out
 let elimsLoaded = false;
 const sweepsMain = document.getElementById('sweepsMain');
 
@@ -2314,14 +2344,19 @@ async function loadKnockouts() {
   if (elimsLoaded) { renderBracket(); return; }
   elimsLoaded = true;   // attempt once per page load
   try {
-    // Knockout rounds run 28 June – 19 July (ET pages; +1 day buffer for safety)
-    const res = await fetch(BASE_URL + '?dates=20260628-20260720&limit=400');
+    // Whole tournament, 11 June – 19 July (ET pages; +1 day buffer). Group games
+    // are needed too so the “first top-10 team out” bonus can order group exits.
+    const res = await fetch(BASE_URL + '?dates=20260611-20260720&limit=400');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     koEvents = data.events || [];
     koWins = {};
     koLosses = {};
     champion = null;
+    runnerUp = null;
+    finalists = [];
+    elimDate = {};
+    const lastGroupGame = {};   // teamId -> date of their latest finished group game
     const knockoutTeamIds = new Set();
     koEvents.forEach(ev => {
       const slugForIds = ev.season?.slug || '';
@@ -2330,20 +2365,43 @@ async function loadKnockouts() {
           if (c.team?.id && !String(c.team.id).startsWith('$')) knockoutTeamIds.add(c.team.id);
         });
       }
+      if (slugForIds === 'final') {
+        const ids = (ev.competitions?.[0]?.competitors || [])
+          .map(c => c.team?.id).filter(id => id && !String(id).startsWith('$'));
+        if (ids.length === 2) finalists = ids;
+      }
       const comp = ev.competitions?.[0];
       if (!comp || comp.status?.type?.state !== 'post') return;
       const slug = ev.season?.slug || '';
-      if (slug === 'group-stage') return;
+      if (slug === 'group-stage') {
+        (comp.competitors || []).forEach(c => {
+          const id = c.team?.id;
+          if (!id || String(id).startsWith('$')) return;
+          if (!lastGroupGame[id] || new Date(ev.date) > new Date(lastGroupGame[id])) lastGroupGame[id] = ev.date;
+        });
+        return;
+      }
       const comps = comp.competitors || [];
       const loser = comps.find(c => !c.winner);
       const winner = comps.find(c => c.winner);
       if (winner?.team?.id) koWins[winner.team.id] = (koWins[winner.team.id] || 0) + 1;
       if (loser?.team?.id) koLosses[loser.team.id] = (koLosses[loser.team.id] || 0) + 1;
       if (slug === 'third-place-match') return;   // counts for points, not elimination
-      if (loser?.team?.id) eliminated[loser.team.id] = stageShort(slug);
-      if (slug === 'final' && winner?.team?.id) champion = winner.team.id;
+      if (loser?.team?.id) {
+        eliminated[loser.team.id] = stageShort(slug);
+        elimDate[loser.team.id] = ev.date;
+      }
+      if (slug === 'final') {
+        if (winner?.team?.id) champion = winner.team.id;
+        if (loser?.team?.id) runnerUp = loser.team.id;
+      }
     });
     applyGroupStageEliminations(knockoutTeamIds);
+    // Date a group-stage exit by the team's final group game so “first out” can
+    // be ordered between top-10 teams that both fell in the groups.
+    Object.keys(eliminated).forEach(id => {
+      if (eliminated[id] === 'Group' && !elimDate[id] && lastGroupGame[id]) elimDate[id] = lastGroupGame[id];
+    });
     renderSweeps();
     renderBracket();
   } catch (err) {
@@ -2586,6 +2644,86 @@ function sweepGames(en) {
   return (Number(t.gp) || 0) + (koWins[en.teamId] || 0) + (koLosses[en.teamId] || 0);
 }
 
+/* ---------- Shrunk bonus points ----------
+   +10 owner of the World Cup winners · +5 owner of the runners-up ·
+   +10 underdog run: worst FIFA-ranked team among those that go furthest in the
+       bracket, i.e. the worst-ranked finalist (decided once the final pairing is set) ·
+   −10 owner of the first top-10 team knocked out of the competition.
+   FIFA rank = a team's position in the SHRUNK_DRAW list (1–48, best to worst). */
+const ELIM_ROUND_ORDER = { Group: 0, R32: 1, R16: 2, QF: 3, SF: 4, Final: 5 };
+function shrunkEntryByTeam(teamId) {
+  return sweeps.Shrunk.find(en => en.teamId && en.teamId === teamId) || null;
+}
+function shrunkRank(teamId) {
+  const i = sweeps.Shrunk.findIndex(en => en.teamId && en.teamId === teamId);
+  return i >= 0 ? i + 1 : null;
+}
+function shrunkBonuses() {
+  const byMember = {};
+  const add = (member, pts) => { if (member) byMember[member] = (byMember[member] || 0) + pts; };
+  const items = [];
+  const teamName = id => teamIndex[id]?.name || shrunkEntryByTeam(id)?.teamName || '?';
+
+  // World Cup winners +10
+  const champEn = champion ? shrunkEntryByTeam(champion) : null;
+  if (champEn) {
+    add(champEn.member, 10);
+    items.push({ label: 'World Cup winners +10', text: champEn.member + ' — ' + teamName(champion) });
+  } else {
+    items.push({ label: 'World Cup winners +10', text: 'decided after the final', pending: true });
+  }
+
+  // Runners-up +5
+  const ruEn = runnerUp ? shrunkEntryByTeam(runnerUp) : null;
+  if (ruEn) {
+    add(ruEn.member, 5);
+    items.push({ label: 'Runners-up +5', text: ruEn.member + ' — ' + teamName(runnerUp) });
+  } else {
+    items.push({ label: 'Runners-up +5', text: 'decided after the final', pending: true });
+  }
+
+  // Underdog run +10 — worst-ranked of the two finalists
+  if (finalists.length === 2) {
+    const worse = finalists.slice().sort((a, b) => (shrunkRank(b) || 0) - (shrunkRank(a) || 0))[0];
+    const udEn = shrunkEntryByTeam(worse);
+    if (udEn) {
+      add(udEn.member, 10);
+      items.push({ label: 'Underdog run +10', text: udEn.member + ' — ' + teamName(worse) +
+        ' (FIFA rank ' + shrunkRank(worse) + ', worst-ranked finalist)' });
+    }
+  } else {
+    items.push({ label: 'Underdog run +10',
+      text: 'worst-ranked team in the final — decided once the final pairing is set', pending: true });
+  }
+
+  // First top-10 team out −10 (top 10 = first ten teams in the draw by FIFA rank)
+  const outTop10 = sweeps.Shrunk.slice(0, 10).filter(en => en.teamId && eliminated[en.teamId]);
+  if (outTop10.length) {
+    const keyOf = en => ({
+      ord: ELIM_ROUND_ORDER[eliminated[en.teamId]] ?? 9,
+      ts: elimDate[en.teamId] ? new Date(elimDate[en.teamId]).getTime() : Infinity
+    });
+    let first = [], firstKey = null;
+    outTop10.forEach(en => {
+      const k = keyOf(en);
+      if (!firstKey || k.ord < firstKey.ord || (k.ord === firstKey.ord && k.ts < firstKey.ts)) {
+        first = [en]; firstKey = k;
+      } else if (k.ord === firstKey.ord && k.ts === firstKey.ts) {
+        first.push(en);   // dead heat (same round, same kickoff) — both cop it
+      }
+    });
+    first.forEach(en => {
+      add(en.member, -10);
+      items.push({ label: 'First top-10 team out −10', text: en.member + ' — ' + teamName(en.teamId) +
+        ' (out ' + eliminated[en.teamId] + ')' });
+    });
+  } else {
+    items.push({ label: 'First top-10 team out −10', text: 'no top-10 team eliminated yet', pending: true });
+  }
+
+  return { byMember, items };
+}
+
 function sweepRow(league, en, idx) {
   const t = teamIndex[en.teamId] || { name: en.teamName || en.teamId, logo: '', group: '', gp: '', w: '', d: '', l: '', pts: '' };
   const role = en.role || 'best';
@@ -2650,12 +2788,18 @@ function renderSweeps(league) {
         totals[k].teams += 1;
         if (!(en.teamId && eliminated[en.teamId])) totals[k].alive += 1;
       });
+      const bonuses = shrunkBonuses();
+      Object.keys(bonuses.byMember).forEach(k => {
+        totals[k] = totals[k] || { pts: 0, alive: 0, teams: 0, gp: 0 };
+      });
+      Object.keys(totals).forEach(k => { totals[k].bonus = bonuses.byMember[k] || 0; });
+      const totalPts = k => totals[k].pts + totals[k].bonus;
       const ranked = Object.keys(totals).sort((a, b) =>
-        totals[b].pts - totals[a].pts || a.localeCompare(b));
+        totalPts(b) - totalPts(a) || a.localeCompare(b));
       leaderboardHtml = '<div class="leaderboard">' +
         '<div class="leaderboard-title">Leaderboard</div>' +
         '<table class="lb-table">' +
-          '<thead><tr><th>#</th><th>Member</th><th>Teams alive</th><th title="Total games played by this member&rsquo;s teams">GP</th><th>Pts</th></tr></thead>' +
+          '<thead><tr><th>#</th><th>Member</th><th>Teams alive</th><th title="Total games played by this member&rsquo;s teams">GP</th><th title="Bonuses: winners +10, runners-up +5, underdog run +10, first top-10 team out \u221210">Bonus</th><th>Pts</th></tr></thead>' +
           '<tbody>' + ranked.map((name, i) => {
             const t = totals[name];
             const cls = i === 0 ? ' class="lb-first"' : (i === ranked.length - 1 ? ' class="lb-last"' : '');
@@ -2664,10 +2808,16 @@ function renderSweeps(league) {
               '<td class="lb-member">' + esc(name) + '</td>' +
               '<td>' + t.alive + '/' + t.teams + '</td>' +
               '<td>' + t.gp + '</td>' +
-              '<td class="lb-pts">' + t.pts + '</td>' +
+              '<td class="lb-bonus-cell' + (t.bonus > 0 ? ' pos' : (t.bonus < 0 ? ' neg' : '')) + '">' +
+                (t.bonus ? (t.bonus > 0 ? '+' + t.bonus : '\u2212' + Math.abs(t.bonus)) : '\u2014') + '</td>' +
+              '<td class="lb-pts">' + (t.pts + t.bonus) + '</td>' +
             '</tr>';
           }).join('') + '</tbody>' +
         '</table>' +
+        '<div class="lb-bonuses">' + bonuses.items.map(it =>
+          '<div class="lb-bonus' + (it.pending ? ' pending' : '') + '">' +
+            '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) + '</div>').join('') +
+        '</div>' +
       '</div>';
     }
     const rows = entries.map((en, i) => sweepRow(league, en, i)).join('');
@@ -2689,7 +2839,7 @@ function renderSweeps(league) {
             (locked ? '' : '<th></th>') + '</tr></thead>' +
             '<tbody>' + rows + '</tbody></table>' +
           (league === 'Shrunk'
-            ? '<div class="sweep-empty" style="padding-top:10px">Scoring: win +2 points, draw +1 point, loss \u22121 point. Ranked highest to lowest.</div>'
+            ? '<div class="sweep-empty" style="padding-top:10px">Scoring: win +2 points, draw +1 point, loss \u22121 point. Bonuses: World Cup winners +10, runners-up +5, underdog run (worst-ranked finalist) +10, first top-10 team out \u221210. Ranked highest to lowest.</div>'
             : '')
         : '<div class="sweep-empty">No members yet — add the sweep draw below.</div>') +
       (locked ? '' :
@@ -3228,6 +3378,44 @@ function awardsCompleted() {
     .sort((x, y) => new Date(x.date) - new Date(y.date) || (x.id > y.id ? 1 : -1));
 }
 
+/* Largest FIFA-ranking upset gap that is STILL achievable in the remainder of
+   the tournament — used to decide when the Punchin' award can stop being
+   "preliminary". For a game to beat the current leader, the lower-ranked side
+   must win, so the biggest possible gap in a fixture is |rankA - rankB|.
+     - Remaining GROUP games: teams are known, so we read the exact gap.
+     - Remaining KNOCKOUT games: competitors are still placeholders (no rank),
+       so we bound them by the still-alive teams — the theoretical worst case is
+       the lowest-ranked survivor beating the highest-ranked survivor. This
+       ignores bracket reachability, so it's a safe OVER-estimate: it will only
+       ever let the award lock LATER than strictly necessary, never too early.
+   Unranked teams (rank 999) are excluded, matching the upset filter itself. */
+function maxRemainingUpsetGap() {
+  if ((!FIFA_RANK_BY_ID || !Object.keys(FIFA_RANK_BY_ID).length) &&
+      Object.keys(teamIndex).length) buildRankIndex();
+  let maxGap = 0, knockoutPending = false;
+  (awardsEvents || []).forEach(ev => {
+    const comp = ev.competitions?.[0]; if (!comp) return;
+    if (comp.status?.type?.state === 'post') return;   // already played
+    const cs = comp.competitors || [];
+    if ((ev.season?.slug || '') === 'group-stage') {
+      const ra = rankOf(cs[0]?.team?.id), rb = rankOf(cs[1]?.team?.id);
+      if (ra < 900 && rb < 900) maxGap = Math.max(maxGap, Math.abs(ra - rb));
+    } else {
+      knockoutPending = true;   // teams not yet resolved — bound below
+    }
+  });
+  if (knockoutPending) {
+    const aliveRanks = Object.keys(FIFA_RANK_BY_ID || {})
+      .filter(id => !eliminated[id])
+      .map(id => FIFA_RANK_BY_ID[id])
+      .filter(r => r < 900);
+    if (aliveRanks.length >= 2) {
+      maxGap = Math.max(maxGap, Math.max(...aliveRanks) - Math.min(...aliveRanks));
+    }
+  }
+  return maxGap;
+}
+
 /* Cumulative goals for/against per team up to (and including) a given day —
    used for the Shared Team second-team tie-break. */
 function teamCumulativeUpTo(dateIso) {
@@ -3338,6 +3526,9 @@ const POLL_GAME_LIMIT = 16;   // how many upcoming fixtures to open polls for
 let votes = store.get('wc26.votes', {});            // { pollId: { voter: choice } }
 let voterName = store.get('wc26.voterName', '');
 if (!votes || typeof votes !== 'object') votes = {};
+/* Local picks awaiting server confirmation: key "poll\0voter" -> {choice, ts}.
+   Stops a stale (not-yet-synced) server read from reverting a just-made pick. */
+let pendingVotes = {};
 
 function teamNameList() {
   const ids = Object.keys(teamIndex);
@@ -3358,14 +3549,27 @@ async function loadVotes() {
     const data = await res.json();
     if (data && typeof data === 'object') {
       votes = data.votes || data;
+      // Overlay recent local picks the server hasn't echoed back yet, so a
+      // just-changed tip isn't reverted; drop each once confirmed (or after 60s).
+      const now = Date.now();
+      Object.keys(pendingVotes).forEach(k => {
+        const { choice, ts } = pendingVotes[k];
+        const i = k.indexOf(' ');
+        const poll = k.slice(0, i), voter = k.slice(i + 1);
+        if ((votes[poll] || {})[voter] === choice || now - ts > 60000) { delete pendingVotes[k]; return; }
+        (votes[poll] = votes[poll] || {})[voter] = choice;
+      });
       store.set('wc26.votes', votes);
-      renderPolls();
+      // Don't rebuild the poll list while someone is typing in a score box.
+      const ae = document.activeElement;
+      if (!(ae && ae.classList && ae.classList.contains('score-in'))) renderPolls();
     }
   } catch (e) { /* keep the localStorage copy */ }
 }
 function castVote(poll, voter, choice) {
   votes[poll] = votes[poll] || {};
   votes[poll][voter] = choice;
+  pendingVotes[poll + ' ' + voter] = { choice: choice, ts: Date.now() };
   store.set('wc26.votes', votes);
   pushPrediction({ type: 'vote', poll: poll, voter: voter, choice: choice });
   renderPolls();
@@ -3417,6 +3621,13 @@ function barsHtml(tally, myChoice, logoFn) {
   }).join('');
 }
 
+/* A competitor is "real" once its slot holds an actual team. ESPN fills knockout
+   slots with placeholder names like "Round of 16 5 Winner" / "Group A Winner"
+   until the feeding match resolves. We only open a poll once BOTH sides are real,
+   so nobody can tip a placeholder (which would freeze that label into the vote). */
+function isRealTeam(t) {
+  return !!(t && t.id && !/(Winner|Loser|Runner|Place)/i.test(t.displayName || ''));
+}
 /* Upcoming (and in-progress) fixtures become "who wins this game?" polls */
 function gamePolls() {
   return (awardsEvents || []).filter(e => {
@@ -3424,7 +3635,7 @@ function gamePolls() {
     const cs = e.competitions?.[0]?.competitors || [];
     const h = cs.find(c => c.homeAway === 'home') || cs[0];
     const a = cs.find(c => c.homeAway === 'away') || cs[1];
-    return (st === 'pre' || st === 'in') && h?.team?.id && a?.team?.id;
+    return (st === 'pre' || st === 'in') && isRealTeam(h?.team) && isRealTeam(a?.team);
   }).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, POLL_GAME_LIMIT)
   .map(ev => {
     const comp = ev.competitions[0];
@@ -3440,9 +3651,83 @@ function gamePolls() {
       id: 'game:' + ev.id,
       title: h.team.displayName + ' v ' + a.team.displayName,
       when: fmtDay(ev.date) + ' \u00b7 ' + fmtKickoff(ev.date),
-      options: opts, locked: state !== 'pre'
+      options: opts, locked: state !== 'pre',
+      ko: ko, home: h.team.displayName, away: a.team.displayName
     };
   });
+}
+
+/* Score tips are stored as their own vote under "score:<pollid>". IMPORTANT:
+   the value is encoded "h<H>a<A>" (e.g. "h2a1"), NOT "2-1". A plain "2-1" gets
+   written into the Google Sheet and auto-converted to a DATE (1 Feb), so it
+   reads back as garbage and the tip vanishes / friends can't see it. The h/a
+   form starts with a letter, so the Sheet always keeps it as text. */
+function parseScore(s) {
+  let m = /^h(\d+)a(\d+)$/.exec(s || '');       // current text-safe form
+  if (!m) m = /^(\d+)-(\d+)$/.exec(s || '');    // legacy form, still readable
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+function encodeScore(h, a) { return 'h' + h + 'a' + a; }
+function fmtScore(s) { const p = parseScore(s); return p ? p[0] + '–' + p[1] : ''; }
+
+/* Score-prediction block for a game poll. For a knockout game tipped level after
+   90', the advancing side is taken from the voter's existing winner pick above. */
+function scoreSectionHtml(p, voter) {
+  const sv = votes['score:' + p.id] || {};
+  const mine = voter ? sv[voter] : null;
+  const ps = parseScore(mine);
+  const hv = ps ? ps[0] : '', av = ps ? ps[1] : '';
+  const dis = p.locked ? ' disabled' : '';
+  // Home is the first option, away the last (Draw sits between them for group games).
+  const homeOpt = p.options[0], awayOpt = p.options[p.options.length - 1];
+  const teamTag = (o) => '<span class="score-team">' +
+    (o && o.logo ? '<img class="score-flag" src="' + esc(o.logo) + '" alt="" loading="lazy">' : '') +
+    esc(o ? o.label : '') + '</span>';
+  let note = '';
+  if (p.ko && ps && ps[0] === ps[1]) {
+    const adv = voter ? (votes[p.id] || {})[voter] : null;
+    const advOk = adv && !/(Winner|Loser|Runner|Place)/i.test(adv);
+    note = '<div class="poll-score-note">Level after 90\u2032 \u2014 extra time / penalties; advances: <strong>' +
+      esc(advOk ? adv : 'pick a winner above') + '</strong></div>';
+  }
+  return '<div class="poll-score">' +
+      '<span class="score-lead">' + (p.locked ? 'Predicted score:' : 'Tip the score:') + '</span>' +
+      '<span class="score-side">' + teamTag(homeOpt) +
+        '<input type="number" min="0" class="pred-in score-in" data-poll="' + esc(p.id) + '" data-side="h" value="' + esc(hv) + '"' + dis + '></span>' +
+      '<span class="score-dash">\u2013</span>' +
+      '<span class="score-side"><input type="number" min="0" class="pred-in score-in" data-poll="' + esc(p.id) + '" data-side="a" value="' + esc(av) + '"' + dis + '>' +
+        teamTag(awayOpt) + '</span>' +
+      (p.locked ? '' : '<button class="score-save" data-poll="' + esc(p.id) + '">' + (mine ? 'Update' : 'Save') + '</button>') +
+    '</div>' + note;
+}
+
+/* Number of valid scoreline tips on a game poll (used to show the expand hint
+   even when nobody has picked a winner yet). */
+function scoreTipCount(p) {
+  return Object.values(votes['score:' + p.id] || {}).filter(s => parseScore(s)).length;
+}
+
+/* Per-person "who tipped what score" breakdown, shown in the card's expansion. */
+function scoreWhoHtml(p) {
+  const sv = votes['score:' + p.id] || {};
+  const byScore = {};
+  Object.keys(sv).forEach(voter => {
+    const f = fmtScore(sv[voter]);   // canonical "H\u2013A", ignores junk/coerced values
+    if (!f) return;
+    (byScore[f] = byScore[f] || []).push(voter);
+  });
+  const keys = Object.keys(byScore).sort((a, b) => byScore[b].length - byScore[a].length || a.localeCompare(b));
+  if (!keys.length) return '';
+  return '<div class="poll-score-who"><div class="poll-score-who-h">Score tips</div>' +
+    keys.map(k =>
+      '<div class="poll-who-row">' +
+        '<span class="poll-who-team">' + esc(k) + '</span>' +
+        '<span class="poll-who-names">' +
+          byScore[k].slice().sort((a, b) => a.localeCompare(b))
+            .map(n => '<span class="poll-who-chip">' + esc(n) + '</span>').join('') +
+        '</span>' +
+      '</div>').join('') +
+  '</div>';
 }
 function gameLockedById(pollId) {
   const id = pollId.replace(/^game:/, '');
@@ -3460,6 +3745,15 @@ function gameOutcome(ev) {
   const w = cs.find(c => c.winner === true);
   return w ? (w.team?.displayName || null) : 'Draw';
 }
+/* Valid vote values for a fixture as it stands now: the two real team names
+   (plus Draw for group games). Used to ignore stale placeholder picks. */
+function validPollChoices(ev) {
+  const cs = ev?.competitions?.[0]?.competitors || [];
+  const set = new Set();
+  cs.forEach(c => { if (c.team?.displayName) set.add(c.team.displayName); });
+  if ((ev?.season?.slug || '') === 'group-stage') set.add('Draw');
+  return set;
+}
 function pollLeaderboard() {
   const matches = {};
   mergedMatches().forEach(e => { matches[e.id] = e; });
@@ -3469,10 +3763,11 @@ function pollLeaderboard() {
     const ev = matches[pollId.slice(5)];
     const outcome = ev ? gameOutcome(ev) : null;
     if (!outcome) return;                               // game not finished / unknown
+    const valid = validPollChoices(ev);
     const v = votes[pollId] || {};
     Object.keys(v).forEach(voter => {
       const choice = v[voter];
-      if (!choice) return;
+      if (!choice || !valid.has(choice)) return;        // ignore stale placeholder picks
       const t = tally[voter] || (tally[voter] = { correct: 0, total: 0 });
       t.total++;
       if (choice === outcome) t.correct++;
@@ -3553,8 +3848,14 @@ function renderPolls() {
     html += '<div class="poll-empty">' + (awardsEvents ? 'No upcoming fixtures to vote on right now.' : 'Loading fixtures…') + '</div>';
   } else {
     gps.forEach(p => {
-      const v = votes[p.id] || {};
-      const myChoice = voterName ? v[voterName] : null;
+      const validSet = new Set(p.options.map(o => o.value));
+      const raw = votes[p.id] || {};
+      // Drop stale votes cast while a side was still a placeholder ("Round of 16
+      // N Winner") — they no longer match a real option, so we hide them from the
+      // results and treat the voter as not having tipped, so they can tip again.
+      const v = {};
+      Object.keys(raw).forEach(voter => { if (validSet.has(raw[voter])) v[voter] = raw[voter]; });
+      const myChoice = voterName && validSet.has(raw[voterName]) ? raw[voterName] : null;
       const logoFn = name => { const o = p.options.find(o => o.value === name); return o ? o.logo : nameLogo(name); };
       const controls = p.locked
         ? '<div class="poll-closed">Voting closed — game has started.</div>'
@@ -3569,10 +3870,11 @@ function renderPolls() {
         '<div class="poll-when">' + esc(p.when) + '</div>' +
         controls +
         (myChoice ? '<div class="poll-mychoice">Your pick: <strong>' + esc(myChoice) + '</strong></div>' : '') +
+        scoreSectionHtml(p, voterName) +
         '<div class="poll-results">' + barsHtml(pollTally(v), myChoice, logoFn) + '</div>' +
         totalLine(v) +
-        (total ? '<div class="poll-who-hint">' + (expanded ? 'Tap to hide who voted' : 'Tap to see who voted') + '</div>' : '') +
-        (expanded ? '<div class="poll-who">' + whoVotedHtml(v, p.options.map(o => o.value), logoFn) + '</div>' : '') +
+        ((total || scoreTipCount(p)) ? '<div class="poll-who-hint">' + (expanded ? 'Tap to hide who voted' : 'Tap to see who voted') + '</div>' : '') +
+        (expanded ? '<div class="poll-who">' + (total ? whoVotedHtml(v, p.options.map(o => o.value), logoFn) : '') + scoreWhoHtml(p) + '</div>' : '') +
       '</div>';
     });
   }
@@ -3598,6 +3900,22 @@ pollsWrapEl.addEventListener('click', (e) => {
     castVote(opt.dataset.poll, voter, opt.dataset.choice);
     return;
   }
+  const sc = e.target.closest('.score-save');
+  if (sc) {
+    const poll = sc.dataset.poll;
+    if (gameLockedById(poll)) return;   // game already kicked off
+    const vi = document.getElementById('voterInput');
+    const voter = (vi ? vi.value.trim() : voterName);
+    if (!voter) { if (vi) vi.focus(); return; }
+    voterName = voter; store.set('wc26.voterName', voterName);
+    const card = sc.closest('.poll-card');
+    const hIn = card.querySelector('.score-in[data-side="h"]');
+    const aIn = card.querySelector('.score-in[data-side="a"]');
+    const h = hIn ? hIn.value.trim() : '', a = aIn ? aIn.value.trim() : '';
+    if (h === '' || a === '' || isNaN(Number(h)) || isNaN(Number(a))) { if (hIn) hIn.focus(); return; }
+    castVote('score:' + poll, voter, encodeScore(Math.max(0, Math.floor(Number(h))), Math.max(0, Math.floor(Number(a)))));
+    return;
+  }
   const btn = e.target.closest('.poll-btn');
   if (btn) {
     const poll = btn.dataset.poll;
@@ -3615,7 +3933,7 @@ pollsWrapEl.addEventListener('click', (e) => {
   }
   // Tapping a card (but not its vote controls) toggles the who-voted breakdown
   const card = e.target.closest('.poll-card');
-  if (card && card.dataset.poll && !e.target.closest('select, button, .poll-vote, .poll-opts')) {
+  if (card && card.dataset.poll && !e.target.closest('select, button, .poll-vote, .poll-opts, .poll-score')) {
     const id = card.dataset.poll;
     pollExpanded[id] = !pollExpanded[id];
     renderPolls();
@@ -3845,6 +4163,12 @@ function computeAwards() {
     punchAward.awarded = true;
     punchAward.detail = punch.m.label + ' — ' + fmtDay(punch.m.date) + ' (rank gap ' + punch.diff + ')';
     punchAward.groups = withResolved([{ teamId: punch.m.winner.team?.id, date: punch.m.date }], 'punch');
+    // Lock it in once no remaining game can even match the current gap. Strict
+    // '<' so an equal-gap upset (which could overtake on tie-breaks) keeps it open.
+    if (maxRemainingUpsetGap() < punch.diff) {
+      punchAward.preliminary = false;
+      punchAward.prelimNote = undefined;
+    }
   }
 
   // Biggest Loser — heaviest defeat; tie-break: margin, then fewest goals by loser
