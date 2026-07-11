@@ -2130,6 +2130,9 @@ let runnerUp = null;           // teamId of the losing finalist
 let finalists = [];            // both finalist teamIds once the final pairing is set
 let elimDate = {};             // teamId -> kickoff date of the match that knocked them out
 let koGd = {};                 // teamId -> goal difference across knockout games (incl. 3rd place)
+let koGf = {};                 // teamId -> goals scored in knockout games
+let koGa = {};                 // teamId -> goals conceded in knockout games
+let teamGameLog = [];          // every finished game per team: { id, date, res: 'W'|'D'|'L', g: total goals }
 let matchResults = [];         // every decided match: { winnerId, loserId, goals, shootout, slug, date }
 let thirdPlaceWinner = null;   // teamId of the third-place play-off winner
 let elimsLoaded = false;
@@ -2387,6 +2390,9 @@ async function loadKnockouts() {
     finalists = [];
     elimDate = {};
     koGd = {};
+    koGf = {};
+    koGa = {};
+    teamGameLog = [];
     matchResults = [];
     thirdPlaceWinner = null;
     const lastGroupGame = {};   // teamId -> date of their latest finished group game
@@ -2414,10 +2420,15 @@ async function loadKnockouts() {
           if (!lastGroupGame[id] || new Date(ev.date) > new Date(lastGroupGame[id])) lastGroupGame[id] = ev.date;
         });
         const gw = gcomps.find(c => c.winner), gl = gcomps.find(c => c.winner === false || (gw && c !== gw));
+        const gGoals = gcomps.reduce((n, c) => n + (Number(c.score) || 0), 0);
         if (gw?.team?.id && gl?.team?.id) {
-          matchResults.push({ winnerId: gw.team.id, loserId: gl.team.id,
-            goals: gcomps.reduce((n, c) => n + (Number(c.score) || 0), 0),
+          matchResults.push({ winnerId: gw.team.id, loserId: gl.team.id, goals: gGoals,
+            margin: Math.abs((Number(gw.score) || 0) - (Number(gl.score) || 0)),
             shootout: false, slug, date: ev.date });
+          teamGameLog.push({ id: gw.team.id, date: ev.date, res: 'W', g: gGoals });
+          teamGameLog.push({ id: gl.team.id, date: ev.date, res: 'L', g: gGoals });
+        } else if (gcomps.length === 2 && gcomps.every(c => c.team?.id && !String(c.team.id).startsWith('$'))) {
+          gcomps.forEach(c => teamGameLog.push({ id: c.team.id, date: ev.date, res: 'D', g: gGoals }));
         }
         return;
       }
@@ -2431,11 +2442,18 @@ async function loadKnockouts() {
         const s0 = Number(comps[0].score) || 0, s1 = Number(comps[1].score) || 0;
         koGd[comps[0].team.id] = (koGd[comps[0].team.id] || 0) + (s0 - s1);
         koGd[comps[1].team.id] = (koGd[comps[1].team.id] || 0) + (s1 - s0);
+        koGf[comps[0].team.id] = (koGf[comps[0].team.id] || 0) + s0;
+        koGa[comps[0].team.id] = (koGa[comps[0].team.id] || 0) + s1;
+        koGf[comps[1].team.id] = (koGf[comps[1].team.id] || 0) + s1;
+        koGa[comps[1].team.id] = (koGa[comps[1].team.id] || 0) + s0;
       }
       if (winner?.team?.id && loser?.team?.id) {
-        matchResults.push({ winnerId: winner.team.id, loserId: loser.team.id,
-          goals: comps.reduce((n, c) => n + (Number(c.score) || 0), 0),
+        const koGoals = comps.reduce((n, c) => n + (Number(c.score) || 0), 0);
+        matchResults.push({ winnerId: winner.team.id, loserId: loser.team.id, goals: koGoals,
+          margin: Math.abs((Number(winner.score) || 0) - (Number(loser.score) || 0)),
           shootout: comps.some(c => competitorPenaltyScore(c) !== ''), slug, date: ev.date });
+        teamGameLog.push({ id: winner.team.id, date: ev.date, res: 'W', g: koGoals });
+        teamGameLog.push({ id: loser.team.id, date: ev.date, res: 'L', g: koGoals });
       }
       if (slug === 'third-place-match') {   // counts for points, not elimination
         if (winner?.team?.id) thirdPlaceWinner = winner.team.id;
@@ -2775,32 +2793,37 @@ function shrunkBonuses() {
     items.push({ label: 'First top-10 team out −10', text: 'no top-10 team eliminated yet', pending: true });
   }
 
-  // Combined goal difference across each member's teams (group + knockout goals).
+  // Goal difference, normalised per game played — total GD across all of a member's
+  // teams divided by the total games those teams have played, so uneven team
+  // counts (10 v 9) and deeper knockout runs don't skew the comparison.
   // Best +10, worst −15 — preliminary until the tournament is finalised.
   const gdOf = en => (Number(teamIndex[en.teamId]?.gd) || 0) + (koGd[en.teamId] || 0);
-  const memberGd = {};
-  let anyGames = false;
+  const gdTotals = {};   // member -> { gd, games }
   sweeps.Shrunk.forEach(en => {
-    memberGd[en.member] = (memberGd[en.member] || 0) + gdOf(en);
-    if (en.teamId && sweepGames(en) > 0) anyGames = true;
+    const t = (gdTotals[en.member] = gdTotals[en.member] || { gd: 0, games: 0 });
+    t.gd += gdOf(en);
+    t.games += sweepGames(en);
   });
-  const fmtGd = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+  const gdNames = Object.keys(gdTotals).filter(k => gdTotals[k].games > 0);
+  const perGame = k => gdTotals[k].gd / gdTotals[k].games;
+  const fmtRate = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2);
+  const fmtGd = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n));
+  const gdText = k => fmtRate(perGame(k)) + ' per game (' + fmtGd(gdTotals[k].gd) + ' over ' + gdTotals[k].games + ' games)';
   const prelim = !champion;   // finalised once the World Cup has been won
-  if (anyGames) {
-    const names = Object.keys(memberGd);
-    const bestGd = Math.max(...names.map(k => memberGd[k]));
-    const worstGd = Math.min(...names.map(k => memberGd[k]));
-    names.filter(k => memberGd[k] === bestGd).forEach(k => {
+  if (gdNames.length) {
+    const bestGd = Math.max(...gdNames.map(perGame));
+    const worstGd = Math.min(...gdNames.map(perGame));
+    gdNames.filter(k => Math.abs(perGame(k) - bestGd) < 1e-9).forEach(k => {
       add(k, 10);
-      items.push({ label: 'Best combined GD +10', text: k + ' — GD ' + fmtGd(bestGd), prelim });
+      items.push({ label: 'Best GD per game +10', text: k + ' — ' + gdText(k), prelim });
     });
-    names.filter(k => memberGd[k] === worstGd).forEach(k => {
+    gdNames.filter(k => Math.abs(perGame(k) - worstGd) < 1e-9).forEach(k => {
       add(k, -15);
-      items.push({ label: 'Worst combined GD −15', text: k + ' — GD ' + fmtGd(worstGd), prelim, neg: true });
+      items.push({ label: 'Worst GD per game −15', text: k + ' — ' + gdText(k), prelim, neg: true });
     });
   } else {
-    items.push({ label: 'Best combined GD +10', text: 'no games played yet', pending: true });
-    items.push({ label: 'Worst combined GD −15', text: 'no games played yet', pending: true });
+    items.push({ label: 'Best GD per game +10', text: 'no games played yet', pending: true });
+    items.push({ label: 'Worst GD per game −15', text: 'no games played yet', pending: true });
   }
 
   // Third-place consolation +3
@@ -2949,6 +2972,173 @@ function shrunkBonuses() {
       text: groupsDone ? 'no Best pick went out in the groups' : 'decided after the group stage', pending: !groupsDone });
   }
 
+  // ----- Group-stage novelty awards -----
+  const allTeamIds = Object.keys(teamIndex);
+  const groupStageOver = allTeamIds.length >= 48 && allTeamIds.every(id => Number(teamIndex[id].gp) >= 3);
+  const groupAward = (label, list, pts, describe, noneText) => {
+    if (list.length) {
+      list.forEach(en => { add(en.member, pts); items.push({ label, text: describe(en), neg: pts < 0 || undefined }); });
+    } else {
+      items.push({ label, text: groupStageOver ? noneText : 'decided after the group stage', pending: !groupStageOver });
+    }
+  };
+
+  // Perfect group +3 — won all three group games
+  groupAward('Perfect group +3',
+    sweeps.Shrunk.filter(en => { const t = teamIndex[en.teamId]; return t && Number(t.gp) >= 3 && Number(t.w) === 3; }),
+    3, en => en.member + ' — ' + teamName(en.teamId) + ' won all three group games',
+    'no team won all three group games');
+
+  // Pointless −3 — lost all three group games
+  groupAward('Pointless −3',
+    sweeps.Shrunk.filter(en => { const t = teamIndex[en.teamId]; return t && Number(t.gp) >= 3 && Number(t.l) === 3; }),
+    -3, en => en.member + ' — ' + teamName(en.teamId) + ' lost all three group games',
+    'no team lost all three group games');
+
+  // Group toppers +2 each — finished first in the group
+  groupAward('Group topper +2',
+    sweeps.Shrunk.filter(en => { const t = teamIndex[en.teamId]; return t && Number(t.gp) >= 3 && Number(t.rank) === 1; }),
+    2, en => en.member + ' — ' + teamName(en.teamId) + ' topped Group ' + (teamIndex[en.teamId].group || '?'),
+    'no group winners');
+
+  // Escape artist +3 — advanced as one of the eight best third-placed teams
+  groupAward('Escape artist +3',
+    groupStageOver ? sweeps.Shrunk.filter(en => { const t = teamIndex[en.teamId];
+      return t && Number(t.rank) === 3 && eliminated[en.teamId] !== 'Group'; }) : [],
+    3, en => en.member + ' — ' + teamName(en.teamId) + ' squeezed through in third',
+    'no team of yours advanced in third place');
+
+  // Full house +5 — every Best pick reached the knockouts
+  if (groupStageOver) {
+    const bestByMember = {};
+    sweeps.Shrunk.forEach(en => { if (en.role === 'best') (bestByMember[en.member] = bestByMember[en.member] || []).push(en); });
+    const fullHouse = Object.keys(bestByMember).sort()
+      .filter(k => bestByMember[k].every(en => en.teamId && eliminated[en.teamId] !== 'Group'));
+    if (fullHouse.length) {
+      fullHouse.forEach(k => { add(k, 5); items.push({ label: 'Full house +5', text: k + ' — all Best picks reached the knockouts' }); });
+    } else {
+      items.push({ label: 'Full house +5', text: 'no player got every Best pick through the groups' });
+    }
+  } else {
+    items.push({ label: 'Full house +5', text: 'decided after the group stage', pending: true });
+  }
+
+  // Dud double +5 — two or more Duds reached the knockouts
+  if (groupStageOver) {
+    const dudThrough = {};
+    sweeps.Shrunk.forEach(en => {
+      if (en.role === 'dud' && en.teamId && eliminated[en.teamId] !== 'Group') dudThrough[en.member] = (dudThrough[en.member] || 0) + 1;
+    });
+    const doubles = Object.keys(dudThrough).sort().filter(k => dudThrough[k] >= 2);
+    if (doubles.length) {
+      doubles.forEach(k => { add(k, 5); items.push({ label: 'Dud double +5', text: k + ' — ' + dudThrough[k] + ' Duds reached the knockouts' }); });
+    } else {
+      items.push({ label: 'Dud double +5', text: 'no player got two Duds through the groups' });
+    }
+  } else {
+    items.push({ label: 'Dud double +5', text: 'decided after the group stage', pending: true });
+  }
+
+  // ----- Goal-based awards -----
+  // Golden boots +5 / Leaky bucket −5 — most goals scored / conceded per game
+  const attTotals = {};   // member -> { gf, ga, games }
+  sweeps.Shrunk.forEach(en => {
+    const t = (attTotals[en.member] = attTotals[en.member] || { gf: 0, ga: 0, games: 0 });
+    t.gf += (Number(teamIndex[en.teamId]?.gf) || 0) + (koGf[en.teamId] || 0);
+    t.ga += (Number(teamIndex[en.teamId]?.ga) || 0) + (koGa[en.teamId] || 0);
+    t.games += sweepGames(en);
+  });
+  const attNames = Object.keys(attTotals).filter(k => attTotals[k].games > 0);
+  if (attNames.length) {
+    const gfRate = k => attTotals[k].gf / attTotals[k].games;
+    const gaRate = k => attTotals[k].ga / attTotals[k].games;
+    const bestGf = Math.max(...attNames.map(gfRate));
+    const worstGa = Math.max(...attNames.map(gaRate));
+    attNames.filter(k => Math.abs(gfRate(k) - bestGf) < 1e-9).forEach(k => {
+      add(k, 5);
+      items.push({ label: 'Golden boots +5', text: k + ' — ' + gfRate(k).toFixed(2) + ' goals scored per game (' + attTotals[k].gf + ' in ' + attTotals[k].games + ')', prelim });
+    });
+    attNames.filter(k => Math.abs(gaRate(k) - worstGa) < 1e-9).forEach(k => {
+      add(k, -5);
+      items.push({ label: 'Leaky bucket −5', text: k + ' — ' + gaRate(k).toFixed(2) + ' goals conceded per game (' + attTotals[k].ga + ' in ' + attTotals[k].games + ')', prelim, neg: true });
+    });
+  } else {
+    items.push({ label: 'Golden boots +5', text: 'no games played yet', pending: true });
+    items.push({ label: 'Leaky bucket −5', text: 'no games played yet', pending: true });
+  }
+
+  // Demolition job +3 / Steamrolled −3 — biggest winning margin of the tournament
+  let blowouts = [], bigMargin = 0;
+  matchResults.forEach(m => {
+    const mg = m.margin || 0;
+    if (mg > bigMargin) { blowouts = [m]; bigMargin = mg; }
+    else if (mg === bigMargin && mg > 0) blowouts.push(m);
+  });
+  if (bigMargin > 0) {
+    blowouts.forEach(m => {
+      const wEn = shrunkEntryByTeam(m.winnerId), lEn = shrunkEntryByTeam(m.loserId);
+      if (wEn) {
+        add(wEn.member, 3);
+        items.push({ label: 'Demolition job +3', text: wEn.member + ' — ' + teamName(m.winnerId) + ' won by ' + bigMargin + ' v ' + teamName(m.loserId), prelim });
+      }
+      if (lEn) {
+        add(lEn.member, -3);
+        items.push({ label: 'Steamrolled −3', text: lEn.member + ' — ' + teamName(m.loserId) + ' lost by ' + bigMargin + ' v ' + teamName(m.winnerId), prelim, neg: true });
+      }
+    });
+  } else {
+    items.push({ label: 'Demolition job +3', text: 'no decided matches yet', pending: true });
+    items.push({ label: 'Steamrolled −3', text: 'no decided matches yet', pending: true });
+  }
+
+  // Snoozefest −2 per 0-0 — every goalless draw, both owners cop it
+  const nilNils = {};
+  teamGameLog.forEach(g => {
+    if (g.res !== 'D' || g.g !== 0) return;
+    const en = shrunkEntryByTeam(g.id);
+    if (en) nilNils[en.member] = (nilNils[en.member] || 0) + 1;
+  });
+  if (Object.keys(nilNils).length) {
+    Object.keys(nilNils).sort().forEach(k => {
+      add(k, -2 * nilNils[k]);
+      items.push({ label: 'Snoozefest −2 per 0-0', text: k + ' −' + (2 * nilNils[k]) + ' — ' + nilNils[k] + (nilNils[k] === 1 ? ' goalless draw' : ' goalless draws'), neg: true });
+    });
+  } else {
+    items.push({ label: 'Snoozefest −2 per 0-0', text: 'no goalless draws yet', pending: true });
+  }
+
+  // ----- Streaks & stamina -----
+  // The marathon +3 — most total games played by a player's teams
+  if (gdNames.length) {
+    const mostGames = Math.max(...gdNames.map(k => gdTotals[k].games));
+    gdNames.filter(k => gdTotals[k].games === mostGames).forEach(k => {
+      add(k, 3);
+      items.push({ label: 'The marathon +3', text: k + ' — ' + mostGames + ' games played', prelim });
+    });
+  } else {
+    items.push({ label: 'The marathon +3', text: 'no games played yet', pending: true });
+  }
+
+  // Unbeaten run +5 — longest unbeaten streak by a single team
+  const byTeamLog = {};
+  teamGameLog.slice().sort((a, b) => new Date(a.date) - new Date(b.date))
+    .forEach(g => (byTeamLog[g.id] = byTeamLog[g.id] || []).push(g));
+  const streakOf = id => {
+    let cur = 0, best = 0;
+    (byTeamLog[id] || []).forEach(g => { if (g.res === 'L') cur = 0; else { cur++; if (cur > best) best = cur; } });
+    return best;
+  };
+  const streakers = sweeps.Shrunk.filter(en => en.teamId && streakOf(en.teamId) > 0);
+  if (streakers.length) {
+    const longest = Math.max(...streakers.map(en => streakOf(en.teamId)));
+    streakers.filter(en => streakOf(en.teamId) === longest).forEach(en => {
+      add(en.member, 5);
+      items.push({ label: 'Unbeaten run +5', text: en.member + ' — ' + teamName(en.teamId) + ', ' + longest + ' games unbeaten', prelim });
+    });
+  } else {
+    items.push({ label: 'Unbeaten run +5', text: 'no unbeaten games yet', pending: true });
+  }
+
   return { byMember, items };
 }
 
@@ -3023,9 +3213,28 @@ function shrunkRulesHtml() {
       row('+5', '<b>Biggest upset</b> — owner of the winning team in the result with the largest rank gap'),
       row('+3', '<b>Highest-scoring match</b> — owner of the winning team in the biggest goal-fest')
     ]) +
+    group('Group-stage awards', [
+      row('+3', '<b>Perfect group</b> — each team of yours that wins all three group games'),
+      row('−3', '<b>Pointless</b> — each team of yours that loses all three'),
+      row('+2', '<b>Group topper</b> — each team of yours that finishes first in its group'),
+      row('+3', '<b>Escape artist</b> — each team of yours advancing as a best third-placed side'),
+      row('+5', '<b>Full house</b> — all of your Best picks reach the knockouts'),
+      row('+5', '<b>Dud double</b> — two or more of your Duds reach the knockouts')
+    ]) +
+    group('Goals', [
+      row('+5', '<b>Golden boots</b> — most goals scored per game across your teams'),
+      row('−5', '<b>Leaky bucket</b> — most goals conceded per game'),
+      row('+3', '<b>Demolition job</b> — owner of the team that wins by the tournament\u2019s biggest margin'),
+      row('−3', '<b>Steamrolled</b> — owner of the team on the wrong end of it'),
+      row('−2', '<b>Snoozefest</b> — every goalless draw one of your teams plays out (both owners)')
+    ]) +
+    group('Streaks &amp; stamina', [
+      row('+3', '<b>The marathon</b> — most total games played by your teams'),
+      row('+5', '<b>Unbeaten run</b> — owner of the team with the longest unbeaten streak')
+    ]) +
     group('Goal difference', [
-      row('+10', '<b>Best combined GD</b> — all eight of your teams\u2019 goals for minus goals against'),
-      row('−15', '<b>Worst combined GD</b>')
+      row('+10', '<b>Best GD per game</b> — total GD across all of your teams \u00f7 total games they played, so uneven team counts don\u2019t skew it'),
+      row('−15', '<b>Worst GD per game</b>')
     ]) +
     group('Penalties', [
       row('−10', '<b>First top-10 team out</b> — owner of the first top-10 ranked team knocked out'),
