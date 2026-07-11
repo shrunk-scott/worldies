@@ -2994,6 +2994,8 @@ function teamOptions() {
 
 /* Shrunk awards & points system panel — collapsed by default */
 let shrunkRulesOpen = store.get('wc26.shrunkRulesOpen', false);
+/* Shrunk “awards won” panel — also collapsed by default */
+let shrunkAwardsOpen = store.get('wc26.shrunkAwardsOpen', false);
 function shrunkRulesHtml() {
   const row = (pts, text) =>
     '<div class="rules-row"><span class="rules-pts' + (pts.charAt(0) === '−' ? ' neg' : '') + '">' + pts + '</span> ' + text + '</div>';
@@ -3032,7 +3034,7 @@ function shrunkRulesHtml() {
     '<div class="rules-note">Awards land on the leaderboard as soon as they are decided. Gold-tagged awards in the bonus list are preliminary and can change hands until the tournament is finalised; dead heats are shared, with every tied player receiving the award.</div>' +
   '</div>';
   return '<div class="rules-box">' +
-    '<button class="rules-toggle" aria-expanded="' + (shrunkRulesOpen ? 'true' : 'false') + '">' +
+    '<button class="rules-toggle" data-panel="rules" aria-expanded="' + (shrunkRulesOpen ? 'true' : 'false') + '">' +
       '<span>Awards &amp; points system</span>' +
       '<span class="rules-caret">' + (shrunkRulesOpen ? '\u25be hide' : '\u25b8 show') + '</span>' +
     '</button>' + body +
@@ -3063,6 +3065,7 @@ function renderSweeps(league) {
         if (!(en.teamId && eliminated[en.teamId])) totals[k].alive += 1;
       });
       const bonuses = shrunkBonuses();
+      const awarded = bonuses.items.filter(it => !it.pending);
       Object.keys(bonuses.byMember).forEach(k => {
         totals[k] = totals[k] || { pts: 0, alive: 0, teams: 0, gp: 0 };
       });
@@ -3088,12 +3091,20 @@ function renderSweeps(league) {
             '</tr>';
           }).join('') + '</tbody>' +
         '</table>' +
-        (bonuses.items.some(it => !it.pending)
-          ? '<div class="lb-bonuses">' + bonuses.items.filter(it => !it.pending).map(it =>
-              '<div class="lb-bonus">' +
-                '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) +
-                (it.prelim ? ' <span class="lb-prelim-tag">preliminary — finalised after the final</span>' : '') +
-              '</div>').join('') +
+        (awarded.length
+          ? '<div class="rules-box">' +
+              '<button class="rules-toggle" data-panel="awards" aria-expanded="' + (shrunkAwardsOpen ? 'true' : 'false') + '">' +
+                '<span>Awards won \u00b7 ' + awarded.length + '</span>' +
+                '<span class="rules-caret">' + (shrunkAwardsOpen ? '\u25be hide' : '\u25b8 show') + '</span>' +
+              '</button>' +
+              (shrunkAwardsOpen
+                ? '<div class="rules-body"><div class="lb-bonuses" style="margin-top:0">' + awarded.map(it =>
+                    '<div class="lb-bonus">' +
+                      '<span class="lb-bonus-label">' + esc(it.label) + ':</span> ' + esc(it.text) +
+                      (it.prelim ? ' <span class="lb-prelim-tag">preliminary — finalised after the final</span>' : '') +
+                    '</div>').join('') +
+                  '</div></div>'
+                : '') +
             '</div>'
           : '') +
       '</div>';
@@ -3199,8 +3210,13 @@ document.addEventListener('keydown', (e) => {
 sweepsMain.addEventListener('click', (e) => {
   const rulesToggle = e.target.closest('.rules-toggle');
   if (rulesToggle) {
-    shrunkRulesOpen = !shrunkRulesOpen;
-    store.set('wc26.shrunkRulesOpen', shrunkRulesOpen);
+    if (rulesToggle.dataset.panel === 'awards') {
+      shrunkAwardsOpen = !shrunkAwardsOpen;
+      store.set('wc26.shrunkAwardsOpen', shrunkAwardsOpen);
+    } else {
+      shrunkRulesOpen = !shrunkRulesOpen;
+      store.set('wc26.shrunkRulesOpen', shrunkRulesOpen);
+    }
     renderSweeps();
     return;
   }
