@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AFL Footy Tipping 2027</title>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="trophy-stage" aria-hidden="true"><canvas id="trophy3d"></canvas></div>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <img class="login-logo-img" src="assets/shrunk_logo.png" alt="Shrunk logo">
+    <div class="login-logo">AFL Footy Tipping <span>2027</span></div>
+    <div class="login-copy">Sign in to AFL Footy Tipping 2027.</div>
+
+    <button class="auth-google" id="googleLogin">
+      <span class="google-badge">G</span>
+      Continue with Google
+    </button>
+
+    <div class="or">or use email</div>
+
+    <label for="emailLogin">Email address</label>
+    <input class="auth-input" id="emailLogin" type="email" placeholder="you@example.com" autocomplete="email">
+
+    <label for="passwordLogin">Password</label>
+    <input class="auth-input" id="passwordLogin" type="password" placeholder="••••••••" autocomplete="current-password">
+
+    <button class="btn primary auth-email" id="emailLoginBtn">
+      <span class="icon sm" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 7l8 6 8-6"/></svg>
+      </span>
+      Sign in with email
+    </button>
+
+    <div class="auth-note">
+      Demo authentication only. Google OAuth and secure email/password sign-in will be connected to the production auth backend.
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="head">
+    <div class="brand-wrap">
+      <img class="brand-logo" src="data:image/png;base64,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" alt="Shrunk logo">
+      <div>
+        <div class="brand">AFL Footy Tipping <span>2027</span></div>
+        <div class="sub">Shrunk AFL Footy Tipping</div>
+      </div>
+    </div>
+    <div>
+      <div class="status">
+        <span class="icon sm" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+        </span>
+        Round 8 · Live
+      </div>
+      <div class="user-chip" id="userChip" style="margin-top:7px;justify-content:flex-end;display:none">
+        <button class="avatar" id="avatar" type="button" aria-label="Open profile">S</button>
+        <button class="logout" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <div class="context-island-wrap">
+    <button class="context-island" id="contextIsland" type="button" data-go="tips">
+      <span class="context-dot"></span>
+      <span class="context-copy"><b>Round 8</b> · 2 tips still required</span>
+      <span class="context-divider"></span>
+      <span class="context-action">Finish tips</span>
+    </button>
+  </div>
+
+<section id="home" class="view active">
+  <div class="today-hero">
+    <div class="today-topline">
+      <div>
+        <div class="kicker">AFL Footy Tipping 2027</div>
+        <div class="today-title">Today</div>
+        <div class="today-date">Round 8 · Friday night footy</div>
+      </div>
+      <button class="avatar" type="button" data-go="profile" aria-label="Open your profile">S</button>
+    </div>
+
+    <div class="round-hero">
+      <div class="round-main">
+        <div>
+          <div class="round-label">Your round</div>
+          <div class="round-number"><span class="animated-num" data-target="7">7</span> / 9</div>
+          <div class="round-sub">2 games still need a tip</div>
+        </div>
+        <div class="tip-ring" style="--pct:78">
+          <div class="tip-ring-inner"><b>78%</b><small>complete</small></div>
+        </div>
+      </div>
+      <div class="round-actions">
+        <button class="btn primary" data-go="tips">Complete my tips</button>
+        <button class="joker-mini" type="button" data-go="tips" aria-label="Choose Joker round">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 2h2l1.1 4.2L18 7l-3 3 .9 4-3.9-2.2L8.1 14 9 10 6 7l3.9-.8L11 2z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="metric-strip">
+      <div class="metric-chip"><small>Overall</small><strong>3rd <span class="metric-move">↑1</span></strong></div>
+      <div class="metric-chip"><small>Points</small><strong><span class="animated-num" data-target="58">58</span></strong></div>
+      <div class="metric-chip"><small>Streak</small><strong>🔥 <span class="animated-num" data-target="6">6</span></strong></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title-row">
+      <h2>Next match</h2>
+      <button class="text-action" data-go="matches">All matches</button>
+    </div>
+    <div class="next-match">
+      <div class="match-meta">
+        <span class="pill good">Tonight</span>
+        <span class="lock">Locks in 1h 24m</span>
+      </div>
+      <div class="modern-match">
+        <div class="modern-team">
+          <div class="modern-team-logo car">CAR</div>
+          Carlton
+        </div>
+        <div class="match-centre">
+          <div class="match-time">7:40 PM</div>
+          <div class="match-venue">MCG</div>
+        </div>
+        <div class="modern-team">
+          <div class="modern-team-logo ess">ESS</div>
+          Essendon
+        </div>
+      </div>
+      <div class="home-pickbar">
+        <button class="home-tip" data-home-tip="Carlton">Tip Carlton</button>
+        <button class="home-tip" data-home-tip="Essendon">Tip Essendon</button>
+      </div>
+      <div class="tipstatus" id="homeTipStatus">6 of 8 users have tipped · selections stay hidden until bounce.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title-row">
+      <h2>Live leaderboard</h2>
+      <button class="text-action" data-go="ladder">Full ladder</button>
+    </div>
+    <div class="card">
+      <div class="modern-list">
+        <div class="modern-rank">
+          <div class="rank-num">1</div><div class="rank-avatar">J</div>
+          <div class="rank-name"><b>James</b><span>Collingwood · streak 4</span></div>
+          <div class="rank-score"><b>62</b><span>+7 round</span></div>
+        </div>
+        <div class="modern-rank">
+          <div class="rank-num">2</div><div class="rank-avatar">S</div>
+          <div class="rank-name"><b>Sarah</b><span>Brisbane · streak 3</span></div>
+          <div class="rank-score"><b>60</b><span>+6 round</span></div>
+        </div>
+        <div class="modern-rank you">
+          <div class="rank-num">3</div><div class="rank-avatar">S</div>
+          <div class="rank-name"><b>You</b><span>Current streak 6</span></div>
+          <div class="rank-score"><b>58</b><span>↑ 1 place</span></div>
+        </div>
+        <div class="modern-rank">
+          <div class="rank-num">4</div><div class="rank-avatar">M</div>
+          <div class="rank-name"><b>Matt</b><span>Carlton · streak 2</span></div>
+          <div class="rank-score"><b>55</b><span>+5 round</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title-row"><h2>Explore</h2></div>
+    <div class="quick-scroll">
+      <button class="quick-card" data-go="profile">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c.8-4.1 3.3-6.2 7.5-6.2S18.7 16.9 19.5 21"/></svg></span>
+        <b>Profile</b><span>Name, club & settings</span>
+      </button>
+      <button class="quick-card" data-go="streak">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2C9 6 9.3 8.8 11 11c-3-.2-5 2.2-5 5 0 3.8 2.9 6 6 6 3.9 0 6-2.8 6-6.2 0-4.6-2.5-7-5-9.8 1.6-.1 3.3-1.3 4-3.5-1.9 1-3 .9-4 .5z"/></svg></span>
+        <b>Streak</b><span>Current run: 6</span>
+      </button>
+      <button class="quick-card" data-go="more" data-open-afl="premLadder">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M7 21V10M12 21V6M17 21V13"/><path d="M5 21h14"/></svg></span>
+        <b>AFL ladder</b><span>Premiership standings</span>
+      </button>
+      <button class="quick-card" data-go="more" data-open-afl="premFixture">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span>
+        <b>Fixture</b><span>Rounds, times & venues</span>
+      </button>
+      <button class="quick-card" data-go="finals">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4H5v4a5 5 0 0 0 5 5h4a5 5 0 0 0 5-5V4h-3"/><path d="M9 4V2h6v2"/><path d="M9 14v2a3 3 0 0 0 6 0v-2"/><path d="M10 21h4"/></svg></span>
+        <b>Finals</b><span>Finals tipping mode</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<section id="tips" class="view">
+  <div class="hero">
+    <div class="row">
+      <div><div class="kicker">Round 8</div><div class="big">Make your tips</div></div>
+      <button class="btn gold" id="jokerBtn">
+        <span class="icon sm"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 2h2l1.1 4.2L18 7l-3 3 .9 4-3.9-2.2L8.1 14 9 10 6 7l3.9-.8L11 2z"/><path d="M12 13.2l5.1 2.9L16 10.9l3.8-3.7-5.2-1-2.6-4.8-2.6 4.8-5.2 1L8 10.9 6.9 16.1 12 13.2z" opacity=".35"/></svg></span>
+        Use Joker this round
+      </button>
+    </div>
+  </div>
+  <div class="banner" id="jokerBanner" style="display:none">
+    <b>Joker active — Round 8</b><br>
+    Every correct H&A tip this round scores 2 points. A perfect round still earns the normal +1 bonus.
+  </div>
+
+  <div class="card">
+    <div class="game">
+      <div class="team"><div class="logo">CAR</div>Carlton</div>
+      <div class="vs">Fri 7:40</div>
+      <div class="team right">Essendon<div class="logo">ESS</div></div>
+    </div>
+    <div class="pickbar">
+      <button class="pick active">Carlton</button><button class="pick">Essendon</button>
+    </div>
+    <div class="tipstatus">Your tip is private until the game starts · Locks in 1h 24m</div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="game">
+      <div class="team"><div class="logo">SYD</div>Sydney</div>
+      <div class="vs">Sat 1:45</div>
+      <div class="team right">Geelong<div class="logo">GEE</div></div>
+    </div>
+    <div class="pickbar">
+      <button class="pick">Sydney</button><button class="pick active">Geelong</button>
+    </div>
+    <div class="tipstatus">Tip saved · You can change it until bounce</div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="game">
+      <div class="team"><div class="logo">MEL</div>Melbourne</div>
+      <div class="vs">Sat 4:35</div>
+      <div class="team right">Brisbane<div class="logo">BRI</div></div>
+    </div>
+    <div class="pickbar">
+      <button class="pick">Melbourne</button><button class="pick">Brisbane</button>
+    </div>
+    <div class="tipstatus lock">No tip selected</div>
+  </div>
+</section>
+
+<section id="ladder" class="view">
+  <div class="hero"><div class="kicker">Season</div><div class="big">Competition ladder</div></div>
+  <div class="card">
+    <table class="table">
+      <thead><tr><th># Player</th><th>Correct</th><th>Bonus</th><th>Joker</th><th>Total</th></tr></thead>
+      <tbody>
+        <tr><td>1. James</td><td>59</td><td>+3</td><td>R5</td><td><b>68</b></td></tr>
+        <tr><td>2. Sarah</td><td>58</td><td>+2</td><td>Unused</td><td><b>60</b></td></tr>
+        <tr><td>3. Scott</td><td>57</td><td>+1</td><td>Unused</td><td><b>58</b></td></tr>
+        <tr><td>4. Matt</td><td>55</td><td>0</td><td>R3</td><td><b>55</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="section">
+    <div class="card">
+      <div class="kicker">Scoring audit · Scott</div>
+      <div class="rule"><b>Round 7</b><br><span class="muted">8 correct = 8 pts · not perfect · Joker not used</span></div>
+      <div class="rule"><b>Round 6</b><br><span class="muted">9 correct = 9 pts + 1 perfect-round bonus = 10 pts</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="streak" class="view">
+  <div class="hero"><div class="kicker">Winner streak</div><div class="big">Streak tipping</div></div>
+  <div class="grid">
+    <div class="card span6">
+      <div class="kicker">Your current streak</div>
+      <div class="big"><span class="icon lg" style="color:var(--gold)" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2C9 6 9.3 8.8 11 11c-3-.2-5 2.2-5 5 0 3.8 2.9 6 6 6 3.9 0 6-2.8 6-6.2 0-4.6-2.5-7-5-9.8 1.6-.1 3.3-1.3 4-3.5-1.9 1-3 .9-4 .5z"/></svg></span> 6</div>
+      <div class="streakline">
+        <span class="dot w">W</span><span class="dot w">W</span><span class="dot w">W</span><span class="dot w">W</span><span class="dot w">W</span><span class="dot w">W</span>
+      </div>
+      <div class="muted" style="margin-top:8px">Current pick: Carlton · hidden from others until bounce</div>
+    </div>
+    <div class="card span6">
+      <div class="kicker">Best streak</div>
+      <div class="big">8</div>
+      <div class="muted">Season high: James · 9</div>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Streak leaderboard</h2>
+    <div class="card"><div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Player</th><th>Current</th><th>Best</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>James</td><td>6</td><td>9</td><td class="up">Alive</td></tr>
+          <tr><td>Scott</td><td>6</td><td>8</td><td class="up">Alive</td></tr>
+          <tr><td>Sarah</td><td>2</td><td>6</td><td class="up">Alive</td></tr>
+          <tr><td>Matt</td><td>0</td><td>5</td><td class="down">Busted</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</section>
+
+<section id="matches" class="view">
+  <div class="hero"><div class="kicker">Live scores</div><div class="big">Round 8</div></div>
+  <div class="card">
+    <div class="game">
+      <div class="team"><div class="logo">CAR</div>Carlton</div>
+      <div class="vs"><span class="pill red">Q2 12:48</span></div>
+      <div class="team right">Essendon<div class="logo">ESS</div></div>
+    </div>
+    <div class="row"><div class="score">7.5 <small>47</small></div><div class="score">5.7 <small>37</small></div></div>
+    <div class="section">
+      <div class="kicker">Tips revealed after bounce</div>
+      <div class="hidden-tip"><span>Scott</span><span class="reveal">Carlton</span></div>
+      <div class="hidden-tip"><span>James</span><span class="reveal">Carlton</span></div>
+      <div class="hidden-tip"><span>Sarah</span><span class="reveal">Essendon</span></div>
+      <div class="hidden-tip"><span>Matt</span><span class="muted">No tip</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="finals" class="view">
+  <div class="hero"><div class="final-tag">Finals mode</div><div class="big">September</div></div>
+  <div class="banner">
+    <b>Finals scoring</b><br>
+    Joker and perfect-round bonuses do not apply during finals. Correct tips score 1 point only.
+  </div>
+  <div class="grid">
+    <div class="card span6"><div class="kicker">Qualifying Final</div><div class="game"><div class="team">1st</div><div class="vs">vs</div><div class="team right">4th</div></div></div>
+    <div class="card span6"><div class="kicker">Qualifying Final</div><div class="game"><div class="team">2nd</div><div class="vs">vs</div><div class="team right">3rd</div></div></div>
+    <div class="card span6"><div class="kicker">Elimination Final</div><div class="game"><div class="team">5th</div><div class="vs">vs</div><div class="team right">8th</div></div></div>
+    <div class="card span6"><div class="kicker">Elimination Final</div><div class="game"><div class="team">6th</div><div class="vs">vs</div><div class="team right">7th</div></div></div>
+  </div>
+</section>
+
+
+<section id="profile" class="view">
+  <div class="hero">
+    <div class="profile-hero">
+      <div class="profile-avatar" id="profileAvatar">S</div>
+      <div>
+        <div class="kicker">Your profile</div>
+        <div class="profile-name" id="profileHeroName">Scott</div>
+        <div class="profile-handle" id="profileHeroHandle">@scott</div>
+        <div class="profile-badges">
+          <span class="pill">Rank 3</span>
+          <span class="pill gold">Streak 6</span>
+          <span class="pill good">Active</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="profile-stats">
+    <div class="profile-stat"><b>58</b><span>Points</span></div>
+    <div class="profile-stat"><b>57</b><span>Correct</span></div>
+    <div class="profile-stat"><b>1</b><span>Perfect</span></div>
+  </div>
+
+  <div class="profile-section">
+    <div class="profile-section-title">Personal details</div>
+    <div class="card">
+      <div class="profile-form">
+        <div class="profile-field"><label for="pfFirstName">First name</label><input class="profile-input" id="pfFirstName" type="text" placeholder="Scott" autocomplete="given-name"></div>
+        <div class="profile-field"><label for="pfLastName">Last name</label><input class="profile-input" id="pfLastName" type="text" placeholder="Horsnell" autocomplete="family-name"></div>
+        <div class="profile-field"><label for="pfDisplayName">Display name</label><input class="profile-input" id="pfDisplayName" type="text" placeholder="Scott"></div>
+        <div class="profile-field"><label for="pfNickname">Nickname / handle</label><input class="profile-input" id="pfNickname" type="text" placeholder="scott"></div>
+        <div class="profile-field full"><label for="pfEmail">Email</label><input class="profile-input" id="pfEmail" type="email" placeholder="name@company.com" autocomplete="email"></div>
+        <div class="profile-field full"><label for="pfPhone">Mobile</label><input class="profile-input" id="pfPhone" type="tel" placeholder="04xx xxx xxx" autocomplete="tel"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="profile-section">
+    <div class="profile-section-title">AFL preferences</div>
+    <div class="card">
+      <div class="profile-field">
+        <label for="pfClub">Favourite AFL club</label>
+        <select class="profile-select" id="pfClub">
+          <option value="">Select club</option>
+          <option>Adelaide</option><option>Brisbane</option><option>Carlton</option><option>Collingwood</option><option>Essendon</option><option>Fremantle</option><option>Geelong</option><option>Gold Coast</option><option>GWS</option><option>Hawthorn</option><option>Melbourne</option><option>North Melbourne</option><option>Port Adelaide</option><option>Richmond</option><option>St Kilda</option><option>Sydney</option><option>West Coast</option><option>Western Bulldogs</option>
+        </select>
+        <div class="profile-club-preview" id="profileClubPreview" hidden>
+          <span class="mini-club" id="profileClubCode">AFL</span><span id="profileClubName"></span>
+        </div>
+      </div>
+      <div class="profile-field" style="margin-top:12px"><label for="pfBio">Short bio</label><textarea class="profile-textarea" id="pfBio" maxlength="140" placeholder="A short line other competition members can see."></textarea></div>
+    </div>
+  </div>
+
+  <div class="profile-section">
+    <div class="profile-section-title">Competition settings</div>
+    <div class="card">
+      <div class="profile-switch-row"><div class="profile-switch-copy"><b>Show full name to group</b><span>Otherwise your display name is used.</span></div><button class="switch on" type="button" data-profile-toggle="showFullName" aria-label="Show full name"><i></i></button></div>
+      <div class="profile-switch-row"><div class="profile-switch-copy"><b>Show favourite club</b><span>Displays your club on your public competition profile.</span></div><button class="switch on" type="button" data-profile-toggle="showClub" aria-label="Show favourite club"><i></i></button></div>
+      <div class="profile-switch-row"><div class="profile-switch-copy"><b>Show streak publicly</b><span>Your current and best streak remain visible to the group.</span></div><button class="switch on" type="button" data-profile-toggle="showStreak" aria-label="Show streak publicly"><i></i></button></div>
+    </div>
+  </div>
+
+  <div class="profile-section">
+    <div class="profile-section-title">Notifications</div>
+    <div class="card">
+      <div class="profile-switch-row"><div class="profile-switch-copy"><b>Tip reminders</b><span>Remind me before a match locks if I have not tipped.</span></div><button class="switch on" type="button" data-profile-toggle="tipReminders" aria-label="Tip reminders"><i></i></button></div>
+      <div class="profile-switch-row"><div class="profile-switch-copy"><b>Streak reminders</b><span>Notify me when I still need to make my streak selection.</span></div><button class="switch on" type="button" data-profile-toggle="streakReminders" aria-label="Streak reminders"><i></i></button></div>
+      <div class="profile-switch-row"><div class="profile-switch-copy"><b>Round results</b><span>Receive a summary after the final match of each round.</span></div><button class="switch on" type="button" data-profile-toggle="roundResults" aria-label="Round results"><i></i></button></div>
+    </div>
+  </div>
+
+  <div class="profile-section">
+    <div class="profile-section-title">Account</div>
+    <div class="card">
+      <div class="rule"><b>Sign-in provider</b><br><span class="muted">Google / email demo</span></div>
+      <div class="rule"><b>Competition</b><br><span class="muted">AFL Footy Tipping 2027</span></div>
+      <div class="profile-privacy-note">In the production app, profile data will be stored against the authenticated user account rather than only in this browser.</div>
+    </div>
+  </div>
+
+  <div class="profile-savebar">
+    <button class="btn primary" id="saveProfileBtn" type="button">Save profile</button>
+    <div class="profile-saved" id="profileSaved">Profile saved</div>
+  </div>
+</section>
+
+
+<section id="more" class="view">
+  <div class="hero"><div class="kicker">More</div><div class="big">Competition extras</div></div>
+  <div class="grid">
+    <div class="card span6"><div class="kicker">Awards</div><div class="big" style="font-size:22px">Round Champion</div><div class="muted">Sarah · 9/9 + perfect bonus</div></div>
+    <div class="card span6"><div class="kicker">Polls</div><div class="big" style="font-size:22px">Who wins tonight?</div><div class="muted">Carlton 62% · Essendon 38%</div></div>
+    <div class="card span6"><div class="kicker">Achievements</div><div class="muted">Perfect Round · 5-Streak · Joker Master · Biggest Climb</div></div>
+    <div class="card span6"><div class="kicker">Rules</div>
+      <div class="rule">1 point per correct tip.</div>
+      <div class="rule">+1 for a perfect H&A round.</div>
+      <div class="rule">One Joker round per user: correct tips score 2×.</div>
+      <div class="rule">No Joker or bonus points in finals.</div>
+      <div class="rule">Other users' tips reveal only after that match begins.</div>
+    </div>
+  </div>
+</section>
+
+<div class="footer">2027 Shrunk Innovation Group Pty Ltd</div>
+</div>
+
+<nav class="tabs">
+  <div class="tabbar">
+    <button class="tab active" data-view="home">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M10 21v-6h4v6"/></svg></span>
+      <span>Home</span>
+    </button>
+    <button class="tab" data-view="tips">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/><path d="M8 2h8v4H8z"/></svg></span>
+      <span>Tips</span>
+    </button>
+    <button class="tab" data-view="ladder">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V10M12 21V6M17 21V13"/><path d="M5 21h14"/></svg></span>
+      <span>Ladder</span>
+    </button>
+    <button class="tab" data-view="streak">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2C9 6 9.3 8.8 11 11c-3-.2-5 2.2-5 5 0 3.8 2.9 6 6 6 3.9 0 6-2.8 6-6.2 0-4.6-2.5-7-5-9.8 1.6-.1 3.3-1.3 4-3.5-1.9 1-3 .9-4 .5z"/></svg></span>
+      <span>Streak</span>
+    </button>
+    <button class="tab" data-view="matches">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="7.5" ry="4.5"/><path d="M8.5 9.2c1 1.5 1 4.1 0 5.6M15.5 9.2c-1 1.5-1 4.1 0 5.6"/><path d="M11 10.4l2 3.2M13 10.4l-2 3.2"/></svg></span>
+      <span>Matches</span>
+    </button>
+    <button class="tab" data-view="finals">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H5v4a5 5 0 0 0 5 5h4a5 5 0 0 0 5-5V4h-3"/><path d="M9 4V2h6v2"/><path d="M9 14v2a3 3 0 0 0 6 0v-2"/><path d="M10 21h4"/></svg></span>
+      <span>Finals</span>
+    </button>
+    <button class="tab" data-view="more">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span>
+      <span>More</span>
+    </button>
+  </div>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
+/* AFL ladder / fixture switch */
+const aflSwitchBtns=[...document.querySelectorAll('[data-afl-view]')];
+const aflPanels=[...document.querySelectorAll('.afl-panel')];
+function showAflPanel(id){
+  aflPanels.forEach(p=>p.classList.toggle('active',p.id===id));
+  aflSwitchBtns.forEach(b=>b.classList.toggle('active',b.dataset.aflView===id));
+}
+aflSwitchBtns.forEach(b=>b.addEventListener('click',()=>showAflPanel(b.dataset.aflView)));
+document.querySelectorAll('[data-open-afl]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    setTimeout(()=>{
+      showAflPanel(b.dataset.openAfl);
+      const el=document.querySelector('.afl-switch');
+      if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+    },60);
+  });
+});
+
+
+/* ---------- Motion hooks ---------- */
+document.querySelectorAll('.pick').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    btn.classList.remove('just-selected');
+    void btn.offsetWidth;
+    btn.classList.add('just-selected');
+    setTimeout(()=>btn.classList.remove('just-selected'),420);
+  });
+});
+
+if (typeof jb !== 'undefined' && jb){
+  jb.addEventListener('click',()=>{
+    const isOn = banner && banner.style.display !== 'none';
+    jb.classList.toggle('joker-active',isOn);
+    if (banner && isOn){
+      banner.classList.remove('showing');
+      void banner.offsetWidth;
+      banner.classList.add('showing');
+      setTimeout(()=>banner.classList.remove('showing'),400);
+    }
+  });
+}
+
+/* subtle stagger on view entry */
+const staggerView = (view)=>{
+  const items=[...view.querySelectorAll('.card,.banner,.section h2')].slice(0,10);
+  items.forEach((el,i)=>{
+    el.animate(
+      [
+        {opacity:0,transform:'translateY(9px)'},
+        {opacity:1,transform:'translateY(0)'}
+      ],
+      {duration:280,delay:i*32,easing:'cubic-bezier(.22,1,.36,1)',fill:'both'}
+    );
+  });
+};
+
+const _showView = showView;
+showView = function(id){
+  _showView(id);
+  const view=document.getElementById(id);
+  if(view && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    staggerView(view);
+  }
+};
+
+/* score/ladder feedback demo */
+document.querySelectorAll('.table tbody tr').forEach(row=>{
+  row.addEventListener('click',()=>{
+    row.classList.remove('row-flash');
+    void row.offsetWidth;
+    row.classList.add('row-flash');
+    setTimeout(()=>row.classList.remove('row-flash'),600);
+  });
+});
+
+
+/* ---------- Profile ---------- */
+const PROFILE_KEY='afl27.profile';
+const CLUB_CODES={'Adelaide':'ADE','Brisbane':'BRI','Carlton':'CAR','Collingwood':'COL','Essendon':'ESS','Fremantle':'FRE','Geelong':'GEE','Gold Coast':'GC','GWS':'GWS','Hawthorn':'HAW','Melbourne':'MEL','North Melbourne':'NM','Port Adelaide':'PA','Richmond':'RIC','St Kilda':'STK','Sydney':'SYD','West Coast':'WCE','Western Bulldogs':'WB'};
+const defaultProfile={firstName:'Scott',lastName:'',displayName:'Scott',nickname:'scott',email:'',phone:'',club:'',bio:'',toggles:{showFullName:true,showClub:true,showStreak:true,tipReminders:true,streakReminders:true,roundResults:true}};
+function getProfile(){try{const saved=JSON.parse(localStorage.getItem(PROFILE_KEY)||'null');return {...defaultProfile,...(saved||{}),toggles:{...defaultProfile.toggles,...((saved||{}).toggles||{})}}}catch(e){return {...defaultProfile,toggles:{...defaultProfile.toggles}}}}
+function setInput(id,val){const el=document.getElementById(id);if(el)el.value=val||''}
+function renderClubPreview(club){const wrap=document.getElementById('profileClubPreview'),code=document.getElementById('profileClubCode'),name=document.getElementById('profileClubName');if(!wrap||!code||!name)return;if(!club){wrap.hidden=true;return}wrap.hidden=false;code.textContent=CLUB_CODES[club]||'AFL';name.textContent=club}
+function updateProfileHero(p){const full=[p.firstName,p.lastName].filter(Boolean).join(' ').trim();const publicName=(p.toggles.showFullName&&full)?full:(p.displayName||p.firstName||'User');document.getElementById('profileHeroName').textContent=publicName;document.getElementById('profileHeroHandle').textContent='@'+(p.nickname||String(publicName).toLowerCase().replace(/\s+/g,''));const initial=(publicName.trim()[0]||'U').toUpperCase();document.getElementById('profileAvatar').textContent=initial;if(avatar)avatar.textContent=initial}
+function loadProfile(){const p=getProfile();setInput('pfFirstName',p.firstName);setInput('pfLastName',p.lastName);setInput('pfDisplayName',p.displayName);setInput('pfNickname',p.nickname);setInput('pfEmail',p.email);setInput('pfPhone',p.phone);setInput('pfClub',p.club);setInput('pfBio',p.bio);document.querySelectorAll('[data-profile-toggle]').forEach(btn=>btn.classList.toggle('on',!!p.toggles[btn.dataset.profileToggle]));renderClubPreview(p.club);updateProfileHero(p)}
+function collectProfile(){const current=getProfile(),value=id=>document.getElementById(id)?.value.trim()||'',toggles={...current.toggles};document.querySelectorAll('[data-profile-toggle]').forEach(btn=>toggles[btn.dataset.profileToggle]=btn.classList.contains('on'));return {firstName:value('pfFirstName'),lastName:value('pfLastName'),displayName:value('pfDisplayName'),nickname:value('pfNickname').replace(/^@/,''),email:value('pfEmail'),phone:value('pfPhone'),club:document.getElementById('pfClub')?.value||'',bio:value('pfBio').slice(0,140),toggles}}
+document.querySelectorAll('[data-profile-toggle]').forEach(btn=>btn.addEventListener('click',()=>{btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on')?'true':'false')}));
+document.getElementById('pfClub')?.addEventListener('change',e=>renderClubPreview(e.target.value));
+document.getElementById('saveProfileBtn')?.addEventListener('click',()=>{const p=collectProfile();localStorage.setItem(PROFILE_KEY,JSON.stringify(p));updateProfileHero(p);renderClubPreview(p.club);const saved=document.getElementById('profileSaved');if(saved){saved.classList.remove('show');void saved.offsetWidth;saved.classList.add('show');setTimeout(()=>saved.classList.remove('show'),1700)}});
+document.getElementById('avatar')?.addEventListener('click',()=>showView('profile'));
+loadProfile();
+
+
+/* ---------- 2027 modern interaction layer ---------- */
+document.querySelectorAll('[data-home-tip]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-home-tip]').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const status=document.getElementById('homeTipStatus');
+    if(status){
+      status.textContent='Your '+btn.dataset.homeTip+' tip is saved · hidden from other users until bounce.';
+      status.animate([{opacity:.45,transform:'translateY(3px)'},{opacity:1,transform:'none'}],
+        {duration:320,easing:'cubic-bezier(.22,1,.36,1)'});
+    }
+    if(navigator.vibrate) navigator.vibrate(12);
+  });
+});
+
+/* Subtle number count-up when Home becomes visible */
+function animateHomeNumbers(){
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('#home .animated-num').forEach(el=>{
+    const target=Number(el.dataset.target||0);
+    const duration=520;
+    const start=performance.now();
+    function tick(now){
+      const p=Math.min((now-start)/duration,1);
+      const eased=1-Math.pow(1-p,3);
+      el.textContent=Math.round(target*eased);
+      if(p<1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+setTimeout(animateHomeNumbers,120);
+
+/* Context island responds to navigation */
+document.getElementById('contextIsland')?.addEventListener('click',()=>{
+  if(navigator.vibrate) navigator.vibrate(8);
+});
+
+/* pointer/device parallax for the 3D background canvas without interfering with controls */
+const trophyCanvas=document.getElementById('trophy3d');
+if(trophyCanvas && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+  let tx=0,ty=0,cx=0,cy=0;
+  window.addEventListener('pointermove',e=>{
+    tx=(e.clientX/window.innerWidth-.5)*8;
+    ty=(e.clientY/window.innerHeight-.5)*6;
+  },{passive:true});
+  const parallax=()=>{
+    cx+=(tx-cx)*.055; cy+=(ty-cy)*.055;
+    trophyCanvas.style.transform=`translate3d(${cx}px,${cy}px,0) scale(1.015)`;
+    requestAnimationFrame(parallax);
+  };
+  requestAnimationFrame(parallax);
+}
+
+/* quick cards using AFL switch also open the correct sub-panel */
+document.querySelectorAll('.quick-card[data-open-afl]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    setTimeout(()=>{
+      if(typeof showAflPanel==='function') showAflPanel(btn.dataset.openAfl);
+    },120);
+  });
+});
+
+</script>
+
+  <script src="app.js"></script>
+</body>
+</html>
