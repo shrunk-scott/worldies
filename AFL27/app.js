@@ -1,159 +1,3 @@
-/* AFL ladder / fixture switch */
-const aflSwitchBtns=[...document.querySelectorAll('[data-afl-view]')];
-const aflPanels=[...document.querySelectorAll('.afl-panel')];
-function showAflPanel(id){
-  aflPanels.forEach(p=>p.classList.toggle('active',p.id===id));
-  aflSwitchBtns.forEach(b=>b.classList.toggle('active',b.dataset.aflView===id));
-}
-aflSwitchBtns.forEach(b=>b.addEventListener('click',()=>showAflPanel(b.dataset.aflView)));
-document.querySelectorAll('[data-open-afl]').forEach(b=>{
-  b.addEventListener('click',()=>{
-    setTimeout(()=>{
-      showAflPanel(b.dataset.openAfl);
-      const el=document.querySelector('.afl-switch');
-      if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
-    },60);
-  });
-});
-
-
-/* ---------- Motion hooks ---------- */
-document.querySelectorAll('.pick').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    btn.classList.remove('just-selected');
-    void btn.offsetWidth;
-    btn.classList.add('just-selected');
-    setTimeout(()=>btn.classList.remove('just-selected'),420);
-  });
-});
-
-if (typeof jb !== 'undefined' && jb){
-  jb.addEventListener('click',()=>{
-    const isOn = banner && banner.style.display !== 'none';
-    jb.classList.toggle('joker-active',isOn);
-    if (banner && isOn){
-      banner.classList.remove('showing');
-      void banner.offsetWidth;
-      banner.classList.add('showing');
-      setTimeout(()=>banner.classList.remove('showing'),400);
-    }
-  });
-}
-
-/* subtle stagger on view entry */
-const staggerView = (view)=>{
-  const items=[...view.querySelectorAll('.card,.banner,.section h2')].slice(0,10);
-  items.forEach((el,i)=>{
-    el.animate(
-      [
-        {opacity:0,transform:'translateY(9px)'},
-        {opacity:1,transform:'translateY(0)'}
-      ],
-      {duration:280,delay:i*32,easing:'cubic-bezier(.22,1,.36,1)',fill:'both'}
-    );
-  });
-};
-
-const _showView = showView;
-showView = function(id){
-  _showView(id);
-  const view=document.getElementById(id);
-  if(view && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-    staggerView(view);
-  }
-};
-
-/* score/ladder feedback demo */
-document.querySelectorAll('.table tbody tr').forEach(row=>{
-  row.addEventListener('click',()=>{
-    row.classList.remove('row-flash');
-    void row.offsetWidth;
-    row.classList.add('row-flash');
-    setTimeout(()=>row.classList.remove('row-flash'),600);
-  });
-});
-
-
-/* ---------- Profile ---------- */
-const PROFILE_KEY='afl27.profile';
-const CLUB_CODES={'Adelaide':'ADE','Brisbane':'BRI','Carlton':'CAR','Collingwood':'COL','Essendon':'ESS','Fremantle':'FRE','Geelong':'GEE','Gold Coast':'GC','GWS':'GWS','Hawthorn':'HAW','Melbourne':'MEL','North Melbourne':'NM','Port Adelaide':'PA','Richmond':'RIC','St Kilda':'STK','Sydney':'SYD','West Coast':'WCE','Western Bulldogs':'WB'};
-const defaultProfile={firstName:'Scott',lastName:'',displayName:'Scott',nickname:'scott',email:'',phone:'',club:'',bio:'',toggles:{showFullName:true,showClub:true,showStreak:true,tipReminders:true,streakReminders:true,roundResults:true}};
-function getProfile(){try{const saved=JSON.parse(localStorage.getItem(PROFILE_KEY)||'null');return {...defaultProfile,...(saved||{}),toggles:{...defaultProfile.toggles,...((saved||{}).toggles||{})}}}catch(e){return {...defaultProfile,toggles:{...defaultProfile.toggles}}}}
-function setInput(id,val){const el=document.getElementById(id);if(el)el.value=val||''}
-function renderClubPreview(club){const wrap=document.getElementById('profileClubPreview'),code=document.getElementById('profileClubCode'),name=document.getElementById('profileClubName');if(!wrap||!code||!name)return;if(!club){wrap.hidden=true;return}wrap.hidden=false;code.textContent=CLUB_CODES[club]||'AFL';name.textContent=club}
-function updateProfileHero(p){const full=[p.firstName,p.lastName].filter(Boolean).join(' ').trim();const publicName=(p.toggles.showFullName&&full)?full:(p.displayName||p.firstName||'User');document.getElementById('profileHeroName').textContent=publicName;document.getElementById('profileHeroHandle').textContent='@'+(p.nickname||String(publicName).toLowerCase().replace(/\s+/g,''));const initial=(publicName.trim()[0]||'U').toUpperCase();document.getElementById('profileAvatar').textContent=initial;if(avatar)avatar.textContent=initial}
-function loadProfile(){const p=getProfile();setInput('pfFirstName',p.firstName);setInput('pfLastName',p.lastName);setInput('pfDisplayName',p.displayName);setInput('pfNickname',p.nickname);setInput('pfEmail',p.email);setInput('pfPhone',p.phone);setInput('pfClub',p.club);setInput('pfBio',p.bio);document.querySelectorAll('[data-profile-toggle]').forEach(btn=>btn.classList.toggle('on',!!p.toggles[btn.dataset.profileToggle]));renderClubPreview(p.club);updateProfileHero(p)}
-function collectProfile(){const current=getProfile(),value=id=>document.getElementById(id)?.value.trim()||'',toggles={...current.toggles};document.querySelectorAll('[data-profile-toggle]').forEach(btn=>toggles[btn.dataset.profileToggle]=btn.classList.contains('on'));return {firstName:value('pfFirstName'),lastName:value('pfLastName'),displayName:value('pfDisplayName'),nickname:value('pfNickname').replace(/^@/,''),email:value('pfEmail'),phone:value('pfPhone'),club:document.getElementById('pfClub')?.value||'',bio:value('pfBio').slice(0,140),toggles}}
-document.querySelectorAll('[data-profile-toggle]').forEach(btn=>btn.addEventListener('click',()=>{btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on')?'true':'false')}));
-document.getElementById('pfClub')?.addEventListener('change',e=>renderClubPreview(e.target.value));
-document.getElementById('saveProfileBtn')?.addEventListener('click',()=>{const p=collectProfile();localStorage.setItem(PROFILE_KEY,JSON.stringify(p));updateProfileHero(p);renderClubPreview(p.club);const saved=document.getElementById('profileSaved');if(saved){saved.classList.remove('show');void saved.offsetWidth;saved.classList.add('show');setTimeout(()=>saved.classList.remove('show'),1700)}});
-document.getElementById('avatar')?.addEventListener('click',()=>showView('profile'));
-loadProfile();
-
-
-/* ---------- 2027 modern interaction layer ---------- */
-document.querySelectorAll('[data-home-tip]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-home-tip]').forEach(b=>b.classList.remove('selected'));
-    btn.classList.add('selected');
-    const status=document.getElementById('homeTipStatus');
-    if(status){
-      status.textContent='Your '+btn.dataset.homeTip+' tip is saved · hidden from other users until bounce.';
-      status.animate([{opacity:.45,transform:'translateY(3px)'},{opacity:1,transform:'none'}],
-        {duration:320,easing:'cubic-bezier(.22,1,.36,1)'});
-    }
-    if(navigator.vibrate) navigator.vibrate(12);
-  });
-});
-
-/* Subtle number count-up when Home becomes visible */
-function animateHomeNumbers(){
-  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  document.querySelectorAll('#home .animated-num').forEach(el=>{
-    const target=Number(el.dataset.target||0);
-    const duration=520;
-    const start=performance.now();
-    function tick(now){
-      const p=Math.min((now-start)/duration,1);
-      const eased=1-Math.pow(1-p,3);
-      el.textContent=Math.round(target*eased);
-      if(p<1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  });
-}
-setTimeout(animateHomeNumbers,120);
-
-/* Context island responds to navigation */
-document.getElementById('contextIsland')?.addEventListener('click',()=>{
-  if(navigator.vibrate) navigator.vibrate(8);
-});
-
-/* pointer/device parallax for the 3D background canvas without interfering with controls */
-const trophyCanvas=document.getElementById('trophy3d');
-if(trophyCanvas && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-  let tx=0,ty=0,cx=0,cy=0;
-  window.addEventListener('pointermove',e=>{
-    tx=(e.clientX/window.innerWidth-.5)*8;
-    ty=(e.clientY/window.innerHeight-.5)*6;
-  },{passive:true});
-  const parallax=()=>{
-    cx+=(tx-cx)*.055; cy+=(ty-cy)*.055;
-    trophyCanvas.style.transform=`translate3d(${cx}px,${cy}px,0) scale(1.015)`;
-    requestAnimationFrame(parallax);
-  };
-  requestAnimationFrame(parallax);
-}
-
-/* quick cards using AFL switch also open the correct sub-panel */
-document.querySelectorAll('.quick-card[data-open-afl]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    setTimeout(()=>{
-      if(typeof showAflPanel==='function') showAflPanel(btn.dataset.openAfl);
-    },120);
-  });
-});
-
 const tabs=[...document.querySelectorAll('.tab')];
 const views=[...document.querySelectorAll('.view')];
 function showView(id){
@@ -313,22 +157,22 @@ const loginScreen=document.getElementById('loginScreen');
 const userChip=document.getElementById('userChip');
 const avatar=document.getElementById('avatar');
 function demoSignIn(name='Scott'){
-  loginScreen.classList.add('hidden');
-  userChip.style.display='flex';
-  avatar.textContent=(name.trim()[0]||'U').toUpperCase();
-  localStorage.setItem('afl27.demoUser',name);
+  if(loginScreen) loginScreen.classList.add('hidden');
+  if(userChip) userChip.style.display='flex';
+  if(avatar) avatar.textContent=(name.trim()[0]||'U').toUpperCase();
+  try{ localStorage.setItem('afl27.demoUser',name); }catch(e){}
 }
-document.getElementById('googleLogin').addEventListener('click',()=>demoSignIn('Scott'));
-document.getElementById('emailLoginBtn').addEventListener('click',()=>{
-  const email=document.getElementById('emailLogin').value.trim();
+document.getElementById('googleLogin')?.addEventListener('click',()=>demoSignIn('Scott'));
+document.getElementById('emailLoginBtn')?.addEventListener('click',()=>{
+  const email=document.getElementById('emailLogin')?.value.trim() || '';
   demoSignIn(email?email.split('@')[0]:'Scott');
 });
-document.getElementById('logoutBtn').addEventListener('click',()=>{
-  localStorage.removeItem('afl27.demoUser');
-  userChip.style.display='none';
-  loginScreen.classList.remove('hidden');
+document.getElementById('logoutBtn')?.addEventListener('click',()=>{
+  try{ localStorage.removeItem('afl27.demoUser'); }catch(e){}
+  if(userChip) userChip.style.display='none';
+  if(loginScreen) loginScreen.classList.remove('hidden');
 });
-const savedUser=localStorage.getItem('afl27.demoUser');
+let savedUser=''; try{ savedUser=localStorage.getItem('afl27.demoUser') || ''; }catch(e){}
 if(savedUser) demoSignIn(savedUser);
 
 /* AFL ladder / fixture switch */
