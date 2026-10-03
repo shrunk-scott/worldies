@@ -1570,3 +1570,19 @@ header{
   .tab{padding:6px 9px!important;font-size:12px!important}
   .tabs{gap:4px!important}
 }
+
+
+/* Trophy background model */
+#trophy3d{
+  position:fixed;
+  inset:0;
+  width:100%;
+  height:100%;
+  z-index:0;
+  pointer-events:none;
+  opacity:.22;
+}
+.page,.shell,header,.tabs{position:relative;z-index:1}
+@media(max-width:560px){
+  #trophy3d{opacity:.18}
+}

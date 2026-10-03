@@ -170,9 +170,9 @@ document.getElementById('emailLoginBtn')?.addEventListener('click',()=>{
 document.getElementById('logoutBtn')?.addEventListener('click',()=>{
   try{ localStorage.removeItem('afl27.demoUser'); }catch(e){}
   if(userChip) userChip.style.display='none';
-  if(loginScreen) loginScreen.classList.remove('hidden');
+  /* sign-in screen disabled for prototype */
 });
-let savedUser=''; try{ savedUser=localStorage.getItem('afl27.demoUser') || ''; }catch(e){}
+let savedUser='Scott';
 if(savedUser) demoSignIn(savedUser);
 
 /* AFL ladder / fixture switch */
@@ -415,3 +415,99 @@ function streakSurvives(selectedTeam, winningTeam, isDraw){
 function officialMarginForResult(homeScore, awayScore){
   return homeScore===awayScore ? 0 : Math.abs(homeScore-awayScore);
 }
+
+
+/* ---------- Trophy 3D ---------- */
+(function initTrophy3D(){
+  const canvas = document.getElementById('trophy3d');
+  if(!canvas || !window.THREE || !THREE.STLLoader) return;
+
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+  camera.position.set(0, 0.1, 7.2);
+
+  scene.add(new THREE.HemisphereLight(0xd8e0ea, 0x111722, 1.35));
+
+  const key = new THREE.DirectionalLight(0xffffff, 1.7);
+  key.position.set(4, 7, 6);
+  scene.add(key);
+
+  const fill = new THREE.DirectionalLight(0x9aa8ba, 0.75);
+  fill.position.set(-5, 2, 4);
+  scene.add(fill);
+
+  const rim = new THREE.PointLight(0x8b5cf6, 1.6, 20);
+  rim.position.set(-3, -1, 5);
+  scene.add(rim);
+
+  const loader = new THREE.STLLoader();
+  let holder = null;
+  let baseY = 0;
+
+  function fit(){
+    const w = Math.max(window.innerWidth, 1);
+    const h = Math.max(window.innerHeight, 1);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  async function loadModel(){
+    try{
+      const res = await fetch('assets/Collingwood_Magpies_2023.stl');
+      if(!res.ok) throw new Error('STL HTTP '+res.status);
+      const buf = await res.arrayBuffer();
+      const geo = loader.parse(buf);
+      geo.computeVertexNormals();
+
+      const mat = new THREE.MeshStandardMaterial({
+        color:0xc9d0d8,
+        metalness:0.78,
+        roughness:0.28
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+
+      geo.computeBoundingBox();
+      const box = geo.boundingBox;
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      mesh.geometry.translate(-center.x, -center.y, -center.z);
+      const scale = 4.7 / Math.max(size.y, 0.001);
+      mesh.scale.setScalar(scale);
+
+      holder = new THREE.Group();
+      holder.add(mesh);
+      holder.rotation.x = -Math.PI / 2;
+      holder.rotation.z = -0.08;
+      holder.position.set(window.innerWidth < 600 ? 1.35 : 2.7, 0.1, 0);
+      baseY = holder.position.y;
+      scene.add(holder);
+    }catch(err){
+      console.warn('Trophy model failed to load:', err);
+    }
+  }
+
+  function animate(t){
+    if(holder && !reduceMotion){
+      holder.rotation.z = -0.08 + Math.sin(t*0.00023)*0.06;
+      holder.rotation.y += 0.0014;
+      holder.position.y = baseY + Math.sin(t*0.0007)*0.08;
+    }
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+
+  window.addEventListener('resize', fit, {passive:true});
+  fit();
+  loadModel().finally(()=>requestAnimationFrame(animate));
+})();
+ /* ---------- End Trophy 3D ---------- */
+
