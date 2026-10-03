@@ -13,3 +13,6 @@ Members can open read-only profiles for other users. Email and mobile remain pri
 
 ## Draw rule
 If a match is drawn, a tip for either team is correct. The same rule keeps a Streak alive. The official first-game margin is 0.
+
+## v4 visual direction
+The interface has been restyled to closely follow the supplied original World Cup 2026 app: Barlow/Barlow Condensed typography, compact top tabs, dark flat panels, 10px card radii, thin blue-grey borders, restrained 3D background, and purple replacing the original green accent.

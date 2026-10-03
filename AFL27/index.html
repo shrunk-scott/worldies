@@ -6,6 +6,9 @@
 <title>AFL Footy Tipping 2027</title>
 
   <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="trophy-stage" aria-hidden="true"><canvas id="trophy3d"></canvas></div>
@@ -66,9 +69,42 @@
   </div>
 </header>
 
+<nav class="tabs">
+  <div class="tabbar">
+    <button class="tab active" data-view="home">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M10 21v-6h4v6"/></svg></span>
+      <span>Home</span>
+    </button>
+    <button class="tab" data-view="tips">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/><path d="M8 2h8v4H8z"/></svg></span>
+      <span>Tips</span>
+    </button>
+    <button class="tab" data-view="ladder">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V10M12 21V6M17 21V13"/><path d="M5 21h14"/></svg></span>
+      <span>Ladder</span>
+    </button>
+    <button class="tab" data-view="streak">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2C9 6 9.3 8.8 11 11c-3-.2-5 2.2-5 5 0 3.8 2.9 6 6 6 3.9 0 6-2.8 6-6.2 0-4.6-2.5-7-5-9.8 1.6-.1 3.3-1.3 4-3.5-1.9 1-3 .9-4 .5z"/></svg></span>
+      <span>Streak</span>
+    </button>
+    <button class="tab" data-view="matches">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="7.5" ry="4.5"/><path d="M8.5 9.2c1 1.5 1 4.1 0 5.6M15.5 9.2c-1 1.5-1 4.1 0 5.6"/><path d="M11 10.4l2 3.2M13 10.4l-2 3.2"/></svg></span>
+      <span>Matches</span>
+    </button>
+    <button class="tab" data-view="finals">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H5v4a5 5 0 0 0 5 5h4a5 5 0 0 0 5-5V4h-3"/><path d="M9 4V2h6v2"/><path d="M9 14v2a3 3 0 0 0 6 0v-2"/><path d="M10 21h4"/></svg></span>
+      <span>Finals</span>
+    </button>
+    <button class="tab" data-view="more">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span>
+      <span>More</span>
+    </button>
+  </div>
+</nav>
+
 <div class="shell">
-  <div class="context-island-wrap">
-    <button class="context-island" id="contextIsland" type="button" data-go="tips">
+  <div class="context-island-wrap original-status-wrap">
+    <button class="context-island original-status" id="contextIsland" type="button" data-go="tips">
       <span class="context-dot"></span>
       <span class="context-copy"><b>Round 8</b> · 2 tips still required</span>
       <span class="context-divider"></span>
@@ -507,38 +543,6 @@
 <div class="footer">2027 Shrunk Innovation Group Pty Ltd</div>
 </div>
 
-<nav class="tabs">
-  <div class="tabbar">
-    <button class="tab active" data-view="home">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M10 21v-6h4v6"/></svg></span>
-      <span>Home</span>
-    </button>
-    <button class="tab" data-view="tips">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/><path d="M8 2h8v4H8z"/></svg></span>
-      <span>Tips</span>
-    </button>
-    <button class="tab" data-view="ladder">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V10M12 21V6M17 21V13"/><path d="M5 21h14"/></svg></span>
-      <span>Ladder</span>
-    </button>
-    <button class="tab" data-view="streak">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2C9 6 9.3 8.8 11 11c-3-.2-5 2.2-5 5 0 3.8 2.9 6 6 6 3.9 0 6-2.8 6-6.2 0-4.6-2.5-7-5-9.8 1.6-.1 3.3-1.3 4-3.5-1.9 1-3 .9-4 .5z"/></svg></span>
-      <span>Streak</span>
-    </button>
-    <button class="tab" data-view="matches">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="7.5" ry="4.5"/><path d="M8.5 9.2c1 1.5 1 4.1 0 5.6M15.5 9.2c-1 1.5-1 4.1 0 5.6"/><path d="M11 10.4l2 3.2M13 10.4l-2 3.2"/></svg></span>
-      <span>Matches</span>
-    </button>
-    <button class="tab" data-view="finals">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H5v4a5 5 0 0 0 5 5h4a5 5 0 0 0 5-5V4h-3"/><path d="M9 4V2h6v2"/><path d="M9 14v2a3 3 0 0 0 6 0v-2"/><path d="M10 21h4"/></svg></span>
-      <span>Finals</span>
-    </button>
-    <button class="tab" data-view="more">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span>
-      <span>More</span>
-    </button>
-  </div>
-</nav>
 
 
 

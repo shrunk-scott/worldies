@@ -1241,3 +1241,332 @@ button.modern-rank.member-profile-trigger:hover{background:rgba(139,92,246,.06)}
 .member-sheet-privacy{font-size:9px;line-height:1.5;color:var(--muted);padding:12px 2px}
 .member-self-edit{width:100%;margin-top:2px}
 @media(min-width:760px){.member-sheet{bottom:20px;border-radius:26px}}
+
+
+/* =========================================================
+   ORIGINAL APP VISUAL LANGUAGE
+   Based on the supplied World Cup 2026 interface:
+   compact dark panels, Barlow typography, top text tabs,
+   restrained borders and a single purple accent.
+   ========================================================= */
+:root{
+  --bg:#070b12;
+  --panel:rgba(15,24,36,.88);
+  --panel2:rgba(21,34,47,.90);
+  --panel-2:rgba(21,34,47,.90);
+  --line:#1f3142;
+  --text:#eef4f9;
+  --muted:#7e93a6;
+  --accent:#8b5cf6;
+  --purple:#8b5cf6;
+  --purple2:#a78bfa;
+  --good:#2fbf71;
+  --live:#ff5968;
+  --gold:#e8b84b;
+  --radius:10px;
+}
+
+html{background:var(--bg)}
+body{
+  background:var(--bg)!important;
+  color:var(--text);
+  font-family:'Barlow',system-ui,sans-serif!important;
+  padding-bottom:42px!important;
+}
+body:before{display:none!important}
+
+#trophy3d{opacity:.12!important}
+.shell{
+  width:100%;
+  max-width:760px!important;
+  margin:0 auto;
+  padding:0 20px 42px!important;
+}
+
+/* Header closely follows the original */
+header{
+  position:relative!important;
+  top:auto!important;
+  z-index:35;
+  border-bottom:1px solid var(--line)!important;
+  background:linear-gradient(180deg,rgba(11,18,28,.92) 0%,rgba(7,11,18,.75) 100%)!important;
+  padding:18px 20px 15px!important;
+  backdrop-filter:blur(2px)!important;
+  -webkit-backdrop-filter:blur(2px)!important;
+}
+.head{
+  width:100%;
+  max-width:760px!important;
+  margin:0 auto!important;
+  padding:0!important;
+  min-height:auto!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+}
+.brand-wrap{gap:10px!important}
+.brand-logo{width:92px!important;max-height:31px;object-fit:contain}
+.brand{
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:24px!important;
+  font-weight:700!important;
+  letter-spacing:.035em!important;
+  text-transform:uppercase!important;
+  line-height:1!important;
+}
+.brand span{color:var(--accent)!important}
+.sub{
+  display:block!important;
+  margin-top:3px!important;
+  color:var(--muted)!important;
+  font-size:11px!important;
+}
+.avatar{
+  width:36px!important;height:36px!important;border-radius:8px!important;
+  border:1px solid var(--line)!important;background:var(--panel2)!important;
+  color:var(--text)!important;box-shadow:none!important;
+}
+
+/* Top tabs: same feel as original World Cup app */
+.tabs{
+  position:relative!important;
+  left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;
+  transform:none!important;
+  z-index:30!important;
+  width:100%!important;
+  max-width:760px!important;
+  margin:16px auto 0!important;
+  padding:0 20px!important;
+  border:0!important;border-radius:0!important;
+  background:transparent!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+.tabbar{
+  max-width:none!important;
+  margin:0!important;
+  display:flex!important;
+  justify-content:center!important;
+  flex-wrap:wrap!important;
+  gap:6px!important;
+}
+.tab{
+  flex:0 0 auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  padding:8px 14px!important;
+  border-radius:8px!important;
+  border:1px solid var(--line)!important;
+  background:var(--panel)!important;
+  color:var(--muted)!important;
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:14px!important;
+  font-weight:600!important;
+  letter-spacing:.08em!important;
+  text-transform:uppercase!important;
+  box-shadow:none!important;
+}
+.tab .icon{display:none!important}
+.tab>span:last-child{font-size:inherit!important}
+.tab::before{display:none!important}
+.tab:hover{color:var(--text)!important}
+.tab.active{
+  color:var(--text)!important;
+  border-color:var(--accent)!important;
+  background:rgba(139,92,246,.12)!important;
+}
+
+/* Status line mirrors original countdown/status strip */
+.context-island-wrap.original-status-wrap{
+  position:relative!important;
+  top:auto!important;
+  z-index:5!important;
+  margin:14px auto 0!important;
+  max-width:760px!important;
+  padding:0!important;
+  display:block!important;
+}
+.context-island.original-status{
+  width:100%!important;
+  max-width:none!important;
+  justify-content:center!important;
+  border:0!important;
+  padding:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  box-shadow:none!important;
+  color:var(--muted)!important;
+  animation:none!important;
+}
+.context-dot{width:6px!important;height:6px!important;box-shadow:none!important;background:var(--accent)!important}
+.context-action{color:var(--accent)!important}
+.context-divider{background:var(--line)!important}
+
+/* Original's compact panel/card language */
+.card,.round-hero,.next-match,.metric-chip,.quick-card,.profile-stat,.margin-pick{
+  background:var(--panel)!important;
+  border:1px solid var(--line)!important;
+  border-radius:10px!important;
+  box-shadow:none!important;
+  backdrop-filter:blur(2px)!important;
+  -webkit-backdrop-filter:blur(2px)!important;
+}
+.card:hover{transform:none!important;border-color:var(--line)!important;box-shadow:none!important}
+
+.section{margin-top:18px!important}
+.section h2,.section-title-row h2{
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:18px!important;
+  font-weight:700!important;
+  letter-spacing:.09em!important;
+  text-transform:uppercase!important;
+}
+.kicker,.round-label,.profile-section-title{
+  font-family:'Barlow Condensed',sans-serif!important;
+  letter-spacing:.10em!important;
+  text-transform:uppercase!important;
+}
+
+/* Home - keep newer functionality but visually return to the original */
+.today-hero{padding:18px 0 0!important;max-width:none!important}
+.today-topline{margin-bottom:10px!important}
+.today-title{
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:24px!important;font-weight:700!important;
+  letter-spacing:.04em!important;text-transform:uppercase!important;
+}
+.today-date{font-size:12px!important;color:var(--muted)!important}
+.round-hero{
+  padding:15px 16px!important;
+  background:var(--panel)!important;
+}
+.round-hero:after{display:none!important}
+.round-number{
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:34px!important;letter-spacing:.01em!important;
+}
+.round-actions{margin-top:12px!important}
+.tip-ring{
+  width:72px!important;height:72px!important;
+  box-shadow:none!important;
+  background:conic-gradient(var(--accent) calc(var(--pct)*1%),rgba(255,255,255,.08) 0)!important;
+}
+.tip-ring:before{background:#0b121b!important}
+.tip-ring-inner b{font-family:'Barlow Condensed',sans-serif!important;font-size:20px!important}
+
+.metric-strip{gap:8px!important;margin-top:8px!important}
+.metric-chip{padding:10px 11px!important}
+.metric-chip small{font-size:9px!important}
+.metric-chip strong{
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:17px!important;letter-spacing:.02em!important;
+}
+
+.next-match{padding:14px!important}
+.next-match:before{display:none!important}
+.modern-team-logo{
+  width:52px!important;height:52px!important;border-radius:8px!important;
+  background:var(--panel2)!important;border:1px solid var(--line)!important;
+  box-shadow:none!important;
+}
+.modern-team-logo.car,.modern-team-logo.ess{background:var(--panel2)!important}
+.home-tip,.pick,.btn,.mobile-more-btn,.margin-step{
+  border-radius:6px!important;
+  box-shadow:none!important;
+}
+.btn{
+  border:1px solid var(--line)!important;
+  background:var(--panel2)!important;
+}
+.btn.primary{
+  color:var(--text)!important;
+  border-color:var(--accent)!important;
+  background:rgba(139,92,246,.13)!important;
+  box-shadow:none!important;
+}
+.home-tip.selected,.pick.active,.pick.selected{
+  background:rgba(139,92,246,.12)!important;
+  border-color:var(--accent)!important;
+  box-shadow:none!important;
+}
+
+/* Tables deliberately resemble original group/sweep tables */
+.table-wrap,.prem-ladder-wrap{border-radius:10px!important}
+.table,.prem-ladder,.sweep-table{
+  font-size:13px!important;
+}
+.table th,.prem-ladder th{
+  font-family:'Barlow Condensed',sans-serif!important;
+  font-size:11px!important;
+  font-weight:600!important;
+  letter-spacing:.06em!important;
+  text-transform:uppercase!important;
+  color:var(--muted)!important;
+}
+.table td,.prem-ladder td{border-color:rgba(31,49,66,.60)!important}
+.prem-ladder .top8 td{background:rgba(139,92,246,.045)!important}
+
+/* Remove the modern "floating glass" feel throughout */
+.quick-scroll{gap:8px!important}
+.quick-card{min-width:140px!important;padding:12px!important}
+.profile-savebar{
+  position:static!important;
+  padding:0!important;margin-top:14px!important;
+  background:transparent!important;border:0!important;border-radius:0!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  box-shadow:none!important;
+}
+.member-sheet{
+  background:rgba(15,24,36,.98)!important;
+  border-color:var(--line)!important;
+  border-radius:10px 10px 0 0!important;
+  backdrop-filter:blur(4px)!important;
+  -webkit-backdrop-filter:blur(4px)!important;
+}
+.member-sheet-stats>div{border-radius:8px!important;background:var(--panel2)!important;border-color:var(--line)!important}
+
+/* Form controls */
+.profile-input,.profile-select,.profile-textarea,.margin-input-wrap{
+  background:var(--panel2)!important;
+  border-color:var(--line)!important;
+  border-radius:6px!important;
+}
+.profile-input:focus,.profile-select:focus,.profile-textarea:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 2px rgba(139,92,246,.10)!important;
+}
+
+/* Footer */
+.footer{
+  max-width:760px!important;
+  margin:26px auto 0!important;
+  padding:14px 20px!important;
+  border-top:1px solid var(--line)!important;
+  color:var(--muted)!important;
+  font-size:11px!important;
+}
+
+/* Mobile behavior follows the original's compact layout */
+@media(max-width:560px){
+  .shell{padding-left:14px!important;padding-right:14px!important}
+  header{padding:14px 14px 12px!important}
+  .tabs{padding-left:14px!important;padding-right:14px!important;margin-top:12px!important}
+  .tab{padding:7px 11px!important;font-size:13px!important}
+  .brand{font-size:21px!important}
+  .brand-logo{width:78px!important}
+  .sub{display:none!important}
+  .round-number{font-size:30px!important}
+  .card,.round-hero,.next-match,.metric-chip,.quick-card,.profile-stat,.margin-pick{
+    backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  }
+  .modern-team-logo{width:48px!important;height:48px!important}
+  .today-title{font-size:22px!important}
+  .section h2,.section-title-row h2{font-size:17px!important}
+}
+@media(max-width:380px){
+  .tab{padding:6px 9px!important;font-size:12px!important}
+  .tabs{gap:4px!important}
+}
